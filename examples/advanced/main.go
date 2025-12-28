@@ -106,7 +106,7 @@ func datasetsExample(ctx context.Context, client *langfuse.Client) {
 	dataset, err := client.Datasets().Create(ctx, &langfuse.CreateDatasetRequest{
 		Name:        "qa-evaluation-set",
 		Description: "Question-answering evaluation dataset",
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"category": "qa",
 			"version":  1,
 		},
@@ -120,13 +120,13 @@ func datasetsExample(ctx context.Context, client *langfuse.Client) {
 	// Add items to the dataset
 	item, err := client.Datasets().CreateItem(ctx, &langfuse.CreateDatasetItemRequest{
 		DatasetName: "qa-evaluation-set",
-		Input: map[string]interface{}{
+		Input: map[string]any{
 			"question": "What is the capital of France?",
 		},
-		ExpectedOutput: map[string]interface{}{
+		ExpectedOutput: map[string]any{
 			"answer": "Paris",
 		},
-		Metadata: map[string]interface{}{
+		Metadata: map[string]any{
 			"difficulty": "easy",
 			"category":   "geography",
 		},
@@ -152,45 +152,45 @@ func complexTraceExample(ctx context.Context, client *langfuse.Client) {
 		Name("rag-pipeline").
 		UserID("user-456").
 		SessionID("session-789").
-		Input(map[string]interface{}{
+		Input(map[string]any{
 			"query": "What are the benefits of exercise?",
 		}).
 		Tags([]string{"rag", "production"}).
 		Environment("production").
-		Create()
+		Create(ctx)
 	if err != nil {
 		log.Fatalf("Failed to create trace: %v", err)
 	}
 	fmt.Printf("Created RAG trace: %s\n", trace.ID())
 
 	// Span 1: Query embedding
-	embeddingSpan, err := trace.Span().
+	embeddingSpan, err := trace.NewSpan().
 		Name("query-embedding").
 		Input("What are the benefits of exercise?").
-		Create()
+		Create(ctx)
 	if err != nil {
 		log.Printf("Failed to create embedding span: %v", err)
 		return
 	}
 
 	time.Sleep(30 * time.Millisecond) // Simulate embedding generation
-	embeddingSpan.EndWithOutput([]float64{0.1, 0.2, 0.3, 0.4, 0.5})
+	embeddingSpan.EndWithOutput(ctx, []float64{0.1, 0.2, 0.3, 0.4, 0.5})
 
 	// Span 2: Vector search
-	searchSpan, err := trace.Span().
+	searchSpan, err := trace.NewSpan().
 		Name("vector-search").
-		Input(map[string]interface{}{
+		Input(map[string]any{
 			"embedding": []float64{0.1, 0.2, 0.3, 0.4, 0.5},
 			"top_k":     5,
 		}).
-		Create()
+		Create(ctx)
 	if err != nil {
 		log.Printf("Failed to create search span: %v", err)
 		return
 	}
 
 	time.Sleep(50 * time.Millisecond) // Simulate vector search
-	searchSpan.EndWithOutput(map[string]interface{}{
+	searchSpan.EndWithOutput(ctx, map[string]any{
 		"results": []string{
 			"Exercise improves cardiovascular health...",
 			"Regular physical activity can reduce stress...",
@@ -199,26 +199,26 @@ func complexTraceExample(ctx context.Context, client *langfuse.Client) {
 	})
 
 	// Span 3: Context assembly
-	contextSpan, err := trace.Span().
+	contextSpan, err := trace.NewSpan().
 		Name("context-assembly").
-		Create()
+		Create(ctx)
 	if err != nil {
 		log.Printf("Failed to create context span: %v", err)
 		return
 	}
 
 	time.Sleep(10 * time.Millisecond)
-	contextSpan.End()
+	contextSpan.End(ctx)
 
 	// Generation: LLM call with retrieved context
-	generation, err := trace.Generation().
+	generation, err := trace.NewGeneration().
 		Name("llm-synthesis").
 		Model("gpt-4-turbo").
-		ModelParameters(map[string]interface{}{
+		ModelParameters(map[string]any{
 			"temperature": 0.3,
 			"max_tokens":  500,
 		}).
-		Input(map[string]interface{}{
+		Input(map[string]any{
 			"system": "You are a helpful health assistant. Answer based on the provided context.",
 			"context": []string{
 				"Exercise improves cardiovascular health...",
@@ -228,7 +228,7 @@ func complexTraceExample(ctx context.Context, client *langfuse.Client) {
 		}).
 		PromptName("rag-synthesis").
 		PromptVersion(1).
-		Create()
+		Create(ctx)
 	if err != nil {
 		log.Printf("Failed to create generation: %v", err)
 		return
@@ -237,41 +237,42 @@ func complexTraceExample(ctx context.Context, client *langfuse.Client) {
 	time.Sleep(200 * time.Millisecond) // Simulate LLM call
 
 	generation.EndWithUsage(
+		ctx,
 		"Based on the research, exercise offers several key benefits: 1) Improved cardiovascular health, 2) Reduced stress levels, 3) Better mental health and mood. Regular physical activity is recommended for overall wellness.",
 		150, // input tokens
 		75,  // output tokens
 	)
 
 	// Add evaluation scores
-	generation.Score().
+	generation.NewScore().
 		Name("relevance").
 		NumericValue(0.92).
 		Comment("Response highly relevant to query").
-		Create()
+		Create(ctx)
 
-	generation.Score().
+	generation.NewScore().
 		Name("groundedness").
 		NumericValue(0.88).
 		Comment("Well grounded in context").
-		Create()
+		Create(ctx)
 
 	// Event: Response delivered
-	trace.Event().
+	trace.NewEvent().
 		Name("response-complete").
 		Level(langfuse.ObservationLevelDefault).
-		Metadata(map[string]interface{}{
+		Metadata(map[string]any{
 			"latency_ms": 290,
 		}).
-		Create()
+		Create(ctx)
 
 	// Update trace with final output
 	trace.Update().
-		Output(map[string]interface{}{
+		Output(map[string]any{
 			"response":     "Based on the research, exercise offers several key benefits...",
 			"total_tokens": 225,
 			"latency_ms":   290,
 		}).
-		Apply()
+		Apply(ctx)
 
 	fmt.Println("RAG pipeline trace completed")
 }

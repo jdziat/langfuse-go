@@ -1,0 +1,35 @@
+#!/bin/bash
+# langfuse-hooks: commit-msg
+# Standalone hook script - copy to .git/hooks/commit-msg
+
+COMMIT_MSG_FILE=$1
+commit_msg=$(cat "$COMMIT_MSG_FILE")
+
+# Check if langfuse-hooks is available
+if ! command -v langfuse-hooks &> /dev/null; then
+    exit 0
+fi
+
+# Check if disabled
+if [ "$LANGFUSE_HOOKS_DISABLED" = "true" ]; then
+    exit 0
+fi
+
+# Validate conventional commit format
+if ! echo "$commit_msg" | head -1 | grep -qE "^(feat|fix|docs|test|refactor|perf|chore|ci|build|style)(\(.+\))?: .+"; then
+    echo "Warning: Commit message doesn't follow conventional commits format"
+    echo "Expected: type(scope): description"
+    echo ""
+
+    # Suggest a fix (non-interactive in hooks)
+    suggested=$(langfuse-hooks fix-commit "$commit_msg" 2>/dev/null)
+    if [ -n "$suggested" ]; then
+        echo "Suggested message:"
+        echo "$suggested"
+        echo ""
+        echo "Proceeding with original message. Use 'git commit --amend' to update."
+    fi
+fi
+
+# Always allow the commit to proceed
+exit 0

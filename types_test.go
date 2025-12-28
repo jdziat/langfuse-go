@@ -213,10 +213,10 @@ func TestTraceJSONSerialization(t *testing.T) {
 		Name:      "test-trace",
 		UserID:    "user-456",
 		SessionID: "session-789",
-		Input:     map[string]interface{}{"query": "hello"},
-		Output:    map[string]interface{}{"response": "world"},
+		Input:     map[string]any{"query": "hello"},
+		Output:    map[string]any{"response": "world"},
 		Tags:      []string{"test", "unit"},
-		Metadata:  map[string]interface{}{"key": "value"},
+		Metadata:  map[string]any{"key": "value"},
 		Public:    true,
 	}
 
@@ -284,5 +284,94 @@ func TestUsageJSONSerialization(t *testing.T) {
 	}
 	if result.TotalCost != usage.TotalCost {
 		t.Errorf("TotalCost = %v, want %v", result.TotalCost, usage.TotalCost)
+	}
+}
+
+func TestEnvironmentConstants(t *testing.T) {
+	// Verify environment constants have expected values
+	tests := []struct {
+		constant string
+		expected string
+	}{
+		{EnvProduction, "production"},
+		{EnvDevelopment, "development"},
+		{EnvStaging, "staging"},
+		{EnvTest, "test"},
+	}
+
+	for _, tt := range tests {
+		if tt.constant != tt.expected {
+			t.Errorf("constant = %v, want %v", tt.constant, tt.expected)
+		}
+	}
+}
+
+func TestLabelConstants(t *testing.T) {
+	// Verify label constants have expected values
+	tests := []struct {
+		constant string
+		expected string
+	}{
+		{LabelProduction, "production"},
+		{LabelDevelopment, "development"},
+		{LabelStaging, "staging"},
+		{LabelLatest, "latest"},
+	}
+
+	for _, tt := range tests {
+		if tt.constant != tt.expected {
+			t.Errorf("constant = %v, want %v", tt.constant, tt.expected)
+		}
+	}
+}
+
+func TestModelConstants(t *testing.T) {
+	// Verify model constants are non-empty
+	models := []string{
+		ModelGPT4,
+		ModelGPT4Turbo,
+		ModelGPT4o,
+		ModelGPT4oMini,
+		ModelGPT35Turbo,
+		ModelO1,
+		ModelO1Mini,
+		ModelO1Preview,
+		ModelO3Mini,
+		ModelTextEmbedding,
+		ModelClaude3Opus,
+		ModelClaude3Sonnet,
+		ModelClaude3Haiku,
+		ModelClaude35Sonnet,
+		ModelClaude35Haiku,
+		ModelClaude4Opus,
+		ModelClaude4Sonnet,
+		ModelGeminiPro,
+		ModelGemini15Pro,
+		ModelGemini15Flash,
+		ModelGemini20Flash,
+	}
+
+	for _, model := range models {
+		if model == "" {
+			t.Error("Model constant should not be empty")
+		}
+	}
+}
+
+func TestPromptTypeString(t *testing.T) {
+	tests := []struct {
+		pt       PromptType
+		expected string
+	}{
+		{PromptTypeText, "text"},
+		{PromptTypeChat, "chat"},
+	}
+
+	for _, tt := range tests {
+		t.Run(string(tt.pt), func(t *testing.T) {
+			if tt.pt.String() != tt.expected {
+				t.Errorf("PromptType.String() = %v, want %v", tt.pt.String(), tt.expected)
+			}
+		})
 	}
 }

@@ -1,0 +1,28 @@
+#!/bin/bash
+# langfuse-hooks: prepare-commit-msg
+# Standalone hook script - copy to .git/hooks/prepare-commit-msg
+
+COMMIT_MSG_FILE=$1
+COMMIT_SOURCE=$2
+
+# Skip if message already provided (-m flag) or amend/merge/squash
+if [ -n "$COMMIT_SOURCE" ]; then
+    exit 0
+fi
+
+# Check if langfuse-hooks is available
+if ! command -v langfuse-hooks &> /dev/null; then
+    exit 0
+fi
+
+# Check if disabled
+if [ "$LANGFUSE_HOOKS_DISABLED" = "true" ]; then
+    exit 0
+fi
+
+# Generate commit message
+generated_msg=$(langfuse-hooks generate-commit 2>/dev/null)
+
+if [ $? -eq 0 ] && [ -n "$generated_msg" ]; then
+    echo "$generated_msg" > "$COMMIT_MSG_FILE"
+fi

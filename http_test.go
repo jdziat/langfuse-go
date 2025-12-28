@@ -33,8 +33,8 @@ func TestHTTPClientGet(t *testing.T) {
 	defer server.Close()
 
 	cfg := &Config{
-		PublicKey:  "pk-test",
-		SecretKey:  "sk-test",
+		PublicKey:  "pk-lf-test-key",
+		SecretKey:  "sk-lf-test-key",
 		BaseURL:    server.URL,
 		HTTPClient: &http.Client{Timeout: 5 * time.Second},
 		MaxRetries: 0,
@@ -76,8 +76,8 @@ func TestHTTPClientPost(t *testing.T) {
 	defer server.Close()
 
 	cfg := &Config{
-		PublicKey:  "pk-test",
-		SecretKey:  "sk-test",
+		PublicKey:  "pk-lf-test-key",
+		SecretKey:  "sk-lf-test-key",
 		BaseURL:    server.URL,
 		HTTPClient: &http.Client{Timeout: 5 * time.Second},
 		MaxRetries: 0,
@@ -107,8 +107,8 @@ func TestHTTPClientDelete(t *testing.T) {
 	defer server.Close()
 
 	cfg := &Config{
-		PublicKey:  "pk-test",
-		SecretKey:  "sk-test",
+		PublicKey:  "pk-lf-test-key",
+		SecretKey:  "sk-lf-test-key",
 		BaseURL:    server.URL,
 		HTTPClient: &http.Client{Timeout: 5 * time.Second},
 		MaxRetries: 0,
@@ -126,7 +126,7 @@ func TestHTTPClientAPIError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		json.NewEncoder(w).Encode(map[string]any{
 			"statusCode": 400,
 			"message":    "Invalid request",
 		})
@@ -134,8 +134,8 @@ func TestHTTPClientAPIError(t *testing.T) {
 	defer server.Close()
 
 	cfg := &Config{
-		PublicKey:  "pk-test",
-		SecretKey:  "sk-test",
+		PublicKey:  "pk-lf-test-key",
+		SecretKey:  "sk-lf-test-key",
 		BaseURL:    server.URL,
 		HTTPClient: &http.Client{Timeout: 5 * time.Second},
 		MaxRetries: 0,
@@ -173,8 +173,8 @@ func TestHTTPClientRetry(t *testing.T) {
 	defer server.Close()
 
 	cfg := &Config{
-		PublicKey:  "pk-test",
-		SecretKey:  "sk-test",
+		PublicKey:  "pk-lf-test-key",
+		SecretKey:  "sk-lf-test-key",
 		BaseURL:    server.URL,
 		HTTPClient: &http.Client{Timeout: 5 * time.Second},
 		MaxRetries: 3,
@@ -202,8 +202,8 @@ func TestHTTPClientContextCancellation(t *testing.T) {
 	defer server.Close()
 
 	cfg := &Config{
-		PublicKey:  "pk-test",
-		SecretKey:  "sk-test",
+		PublicKey:  "pk-lf-test-key",
+		SecretKey:  "sk-lf-test-key",
 		BaseURL:    server.URL,
 		HTTPClient: &http.Client{Timeout: 5 * time.Second},
 		MaxRetries: 0,
@@ -234,8 +234,8 @@ func TestHTTPClientQueryParams(t *testing.T) {
 	defer server.Close()
 
 	cfg := &Config{
-		PublicKey:  "pk-test",
-		SecretKey:  "sk-test",
+		PublicKey:  "pk-lf-test-key",
+		SecretKey:  "sk-lf-test-key",
 		BaseURL:    server.URL,
 		HTTPClient: &http.Client{Timeout: 5 * time.Second},
 		MaxRetries: 0,

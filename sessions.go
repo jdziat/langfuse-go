@@ -38,7 +38,7 @@ func (c *SessionsClient) List(ctx context.Context, params *SessionsListParams) (
 	}
 
 	var result SessionsListResponse
-	err := c.client.http.get(ctx, "/sessions", query, &result)
+	err := c.client.http.get(ctx, endpoints.Sessions, query, &result)
 	if err != nil {
 		return nil, err
 	}
@@ -48,7 +48,7 @@ func (c *SessionsClient) List(ctx context.Context, params *SessionsListParams) (
 // Get retrieves a session by ID.
 func (c *SessionsClient) Get(ctx context.Context, sessionID string) (*Session, error) {
 	var result Session
-	err := c.client.http.get(ctx, fmt.Sprintf("/sessions/%s", sessionID), nil, &result)
+	err := c.client.http.get(ctx, fmt.Sprintf("%s/%s", endpoints.Sessions, sessionID), nil, &result)
 	if err != nil {
 		return nil, err
 	}

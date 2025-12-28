@@ -31,7 +31,7 @@ func (c *TracesClient) List(ctx context.Context, params *TracesListParams) (*Tra
 	}
 
 	var result TracesListResponse
-	err := c.client.http.get(ctx, "/traces", query, &result)
+	err := c.client.http.get(ctx, endpoints.Traces, query, &result)
 	if err != nil {
 		return nil, err
 	}
@@ -41,7 +41,7 @@ func (c *TracesClient) List(ctx context.Context, params *TracesListParams) (*Tra
 // Get retrieves a single trace by ID.
 func (c *TracesClient) Get(ctx context.Context, traceID string) (*Trace, error) {
 	var result Trace
-	err := c.client.http.get(ctx, fmt.Sprintf("/traces/%s", traceID), nil, &result)
+	err := c.client.http.get(ctx, fmt.Sprintf("%s/%s", endpoints.Traces, traceID), nil, &result)
 	if err != nil {
 		return nil, err
 	}
@@ -50,5 +50,5 @@ func (c *TracesClient) Get(ctx context.Context, traceID string) (*Trace, error) 
 
 // Delete deletes a trace by ID.
 func (c *TracesClient) Delete(ctx context.Context, traceID string) error {
-	return c.client.http.delete(ctx, fmt.Sprintf("/traces/%s", traceID), nil)
+	return c.client.http.delete(ctx, fmt.Sprintf("%s/%s", endpoints.Traces, traceID), nil)
 }

@@ -28,7 +28,7 @@ func TestSessionsClientList(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-test", "sk-test", WithBaseURL(server.URL))
+	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	result, err := client.Sessions().List(context.Background(), nil)
@@ -62,7 +62,7 @@ func TestSessionsClientListWithParams(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-test", "sk-test", WithBaseURL(server.URL))
+	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	result, err := client.Sessions().List(context.Background(), &SessionsListParams{
@@ -93,7 +93,7 @@ func TestSessionsClientGet(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-test", "sk-test", WithBaseURL(server.URL))
+	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	session, err := client.Sessions().Get(context.Background(), "session-123")
@@ -138,7 +138,7 @@ func TestSessionsClientGetWithTraces(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-test", "sk-test", WithBaseURL(server.URL))
+	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	result, err := client.Sessions().GetWithTraces(context.Background(), "session-123")
@@ -163,14 +163,14 @@ func TestSessionsClientGetNotFound(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		json.NewEncoder(w).Encode(map[string]any{
 			"statusCode": 404,
 			"message":    "Session not found",
 		})
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-test", "sk-test", WithBaseURL(server.URL))
+	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	_, err := client.Sessions().Get(context.Background(), "nonexistent")

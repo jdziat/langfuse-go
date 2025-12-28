@@ -1,0 +1,80 @@
+# golangci-lint configuration (v2)
+# https://golangci-lint.run/usage/configuration/
+
+version: "2"
+
+run:
+  timeout: 5m
+
+output:
+  formats:
+    text:
+      path: stdout
+  sort-order:
+    - file
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  exclusions:
+    paths:
+      - examples
+
+linters:
+  # Use default linters (errcheck, govet, ineffassign, staticcheck, unused)
+  # plus additional ones
+  enable:
+    - misspell
+    - unconvert
+    - gocritic
+
+  exclusions:
+    # Exclude examples directory
+    paths:
+      - examples
+    # Exclude test files from certain linters
+    rules:
+      - linters:
+          - errcheck
+          - gocritic
+          - unparam
+          - staticcheck
+        path: _test\.go
+      - linters:
+          - errcheck
+        path: langfusetest/
+
+  settings:
+    errcheck:
+      check-type-assertions: false
+      check-blank: false
+      exclude-functions:
+        - (io.Closer).Close
+        - (*encoding/json.Encoder).Encode
+        - (*encoding/json.Decoder).Decode
+
+    staticcheck:
+      checks:
+        - all
+        - -QF1008  # Disable embedded field selector suggestions
+
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - performance
+      disabled-checks:
+        - hugeParam
+        - elseif
+        - deferInLoop
+        - exitAfterDefer
+        - appendAssign
+
+    misspell:
+      locale: US
+      extra-words:
+        - typo: cancelled
+          correction: cancelled
+
+  max-issues-per-linter: 0
+  max-same-issues: 0

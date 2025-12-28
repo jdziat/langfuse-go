@@ -28,7 +28,7 @@ func TestDatasetsClientList(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-test", "sk-test", WithBaseURL(server.URL))
+	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	result, err := client.Datasets().List(context.Background(), nil)
@@ -56,7 +56,7 @@ func TestDatasetsClientGet(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-test", "sk-test", WithBaseURL(server.URL))
+	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	dataset, err := client.Datasets().Get(context.Background(), "my-dataset")
@@ -91,7 +91,7 @@ func TestDatasetsClientCreate(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-test", "sk-test", WithBaseURL(server.URL))
+	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	dataset, err := client.Datasets().Create(context.Background(), &CreateDatasetRequest{
@@ -108,7 +108,7 @@ func TestDatasetsClientCreate(t *testing.T) {
 }
 
 func TestDatasetsClientCreateValidation(t *testing.T) {
-	client, _ := New("pk-test", "sk-test")
+	client, _ := New("pk-lf-test-key", "sk-lf-test-key")
 	defer client.Shutdown(context.Background())
 
 	// Nil request
@@ -148,7 +148,7 @@ func TestDatasetsClientListItems(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-test", "sk-test", WithBaseURL(server.URL))
+	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	result, err := client.Datasets().ListItems(context.Background(), &DatasetItemsListParams{
@@ -179,7 +179,7 @@ func TestDatasetsClientGetItem(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-test", "sk-test", WithBaseURL(server.URL))
+	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	item, err := client.Datasets().GetItem(context.Background(), "item-123")
@@ -215,7 +215,7 @@ func TestDatasetsClientCreateItem(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-test", "sk-test", WithBaseURL(server.URL))
+	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	item, err := client.Datasets().CreateItem(context.Background(), &CreateDatasetItemRequest{
@@ -233,7 +233,7 @@ func TestDatasetsClientCreateItem(t *testing.T) {
 }
 
 func TestDatasetsClientCreateItemValidation(t *testing.T) {
-	client, _ := New("pk-test", "sk-test")
+	client, _ := New("pk-lf-test-key", "sk-lf-test-key")
 	defer client.Shutdown(context.Background())
 
 	// Nil request
@@ -264,7 +264,7 @@ func TestDatasetsClientDeleteItem(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-test", "sk-test", WithBaseURL(server.URL))
+	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	err := client.Datasets().DeleteItem(context.Background(), "item-123")
@@ -290,7 +290,7 @@ func TestDatasetsClientListRuns(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-test", "sk-test", WithBaseURL(server.URL))
+	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	result, err := client.Datasets().ListRuns(context.Background(), "my-dataset", nil)
@@ -318,7 +318,7 @@ func TestDatasetsClientGetRun(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-test", "sk-test", WithBaseURL(server.URL))
+	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	run, err := client.Datasets().GetRun(context.Background(), "my-dataset", "my-run")
@@ -344,7 +344,7 @@ func TestDatasetsClientDeleteRun(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-test", "sk-test", WithBaseURL(server.URL))
+	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	err := client.Datasets().DeleteRun(context.Background(), "my-dataset", "my-run")
@@ -379,7 +379,7 @@ func TestDatasetsClientCreateRunItem(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-test", "sk-test", WithBaseURL(server.URL))
+	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	runItem, err := client.Datasets().CreateRunItem(context.Background(), &CreateDatasetRunItemRequest{
@@ -397,7 +397,7 @@ func TestDatasetsClientCreateRunItem(t *testing.T) {
 }
 
 func TestDatasetsClientCreateRunItemValidation(t *testing.T) {
-	client, _ := New("pk-test", "sk-test")
+	client, _ := New("pk-lf-test-key", "sk-lf-test-key")
 	defer client.Shutdown(context.Background())
 
 	// Nil request

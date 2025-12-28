@@ -30,7 +30,7 @@ func (c *DatasetsClient) List(ctx context.Context, params *DatasetsListParams) (
 	}
 
 	var result DatasetsListResponse
-	err := c.client.http.get(ctx, "/v2/datasets", query, &result)
+	err := c.client.http.get(ctx, endpoints.Datasets, query, &result)
 	if err != nil {
 		return nil, err
 	}
@@ -40,7 +40,7 @@ func (c *DatasetsClient) List(ctx context.Context, params *DatasetsListParams) (
 // Get retrieves a dataset by name.
 func (c *DatasetsClient) Get(ctx context.Context, datasetName string) (*Dataset, error) {
 	var result Dataset
-	err := c.client.http.get(ctx, fmt.Sprintf("/v2/datasets/%s", datasetName), nil, &result)
+	err := c.client.http.get(ctx, fmt.Sprintf("%s/%s", endpoints.Datasets, datasetName), nil, &result)
 	if err != nil {
 		return nil, err
 	}
@@ -49,9 +49,9 @@ func (c *DatasetsClient) Get(ctx context.Context, datasetName string) (*Dataset,
 
 // CreateDatasetRequest represents a request to create a dataset.
 type CreateDatasetRequest struct {
-	Name        string                 `json:"name"`
-	Description string                 `json:"description,omitempty"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+	Name        string   `json:"name"`
+	Description string   `json:"description,omitempty"`
+	Metadata    Metadata `json:"metadata,omitempty"`
 }
 
 // Create creates a new dataset.
@@ -64,7 +64,7 @@ func (c *DatasetsClient) Create(ctx context.Context, req *CreateDatasetRequest) 
 	}
 
 	var result Dataset
-	err := c.client.http.post(ctx, "/v2/datasets", req, &result)
+	err := c.client.http.post(ctx, endpoints.Datasets, req, &result)
 	if err != nil {
 		return nil, err
 	}
@@ -102,7 +102,7 @@ func (c *DatasetsClient) ListItems(ctx context.Context, params *DatasetItemsList
 	}
 
 	var result DatasetItemsListResponse
-	err := c.client.http.get(ctx, "/dataset-items", query, &result)
+	err := c.client.http.get(ctx, endpoints.DatasetItems, query, &result)
 	if err != nil {
 		return nil, err
 	}
@@ -112,7 +112,7 @@ func (c *DatasetsClient) ListItems(ctx context.Context, params *DatasetItemsList
 // GetItem retrieves a dataset item by ID.
 func (c *DatasetsClient) GetItem(ctx context.Context, itemID string) (*DatasetItem, error) {
 	var result DatasetItem
-	err := c.client.http.get(ctx, fmt.Sprintf("/dataset-items/%s", itemID), nil, &result)
+	err := c.client.http.get(ctx, fmt.Sprintf("%s/%s", endpoints.DatasetItems, itemID), nil, &result)
 	if err != nil {
 		return nil, err
 	}
@@ -121,14 +121,14 @@ func (c *DatasetsClient) GetItem(ctx context.Context, itemID string) (*DatasetIt
 
 // CreateDatasetItemRequest represents a request to create a dataset item.
 type CreateDatasetItemRequest struct {
-	DatasetName         string                 `json:"datasetName"`
-	Input               interface{}            `json:"input,omitempty"`
-	ExpectedOutput      interface{}            `json:"expectedOutput,omitempty"`
-	Metadata            map[string]interface{} `json:"metadata,omitempty"`
-	SourceTraceID       string                 `json:"sourceTraceId,omitempty"`
-	SourceObservationID string                 `json:"sourceObservationId,omitempty"`
-	Status              string                 `json:"status,omitempty"`
-	ID                  string                 `json:"id,omitempty"`
+	DatasetName         string   `json:"datasetName"`
+	Input               any      `json:"input,omitempty"`
+	ExpectedOutput      any      `json:"expectedOutput,omitempty"`
+	Metadata            Metadata `json:"metadata,omitempty"`
+	SourceTraceID       string   `json:"sourceTraceId,omitempty"`
+	SourceObservationID string   `json:"sourceObservationId,omitempty"`
+	Status              string   `json:"status,omitempty"`
+	ID                  string   `json:"id,omitempty"`
 }
 
 // CreateItem creates a new dataset item.
@@ -141,7 +141,7 @@ func (c *DatasetsClient) CreateItem(ctx context.Context, req *CreateDatasetItemR
 	}
 
 	var result DatasetItem
-	err := c.client.http.post(ctx, "/dataset-items", req, &result)
+	err := c.client.http.post(ctx, endpoints.DatasetItems, req, &result)
 	if err != nil {
 		return nil, err
 	}
@@ -150,7 +150,7 @@ func (c *DatasetsClient) CreateItem(ctx context.Context, req *CreateDatasetItemR
 
 // DeleteItem deletes a dataset item by ID.
 func (c *DatasetsClient) DeleteItem(ctx context.Context, itemID string) error {
-	return c.client.http.delete(ctx, fmt.Sprintf("/dataset-items/%s", itemID), nil)
+	return c.client.http.delete(ctx, fmt.Sprintf("%s/%s", endpoints.DatasetItems, itemID), nil)
 }
 
 // DatasetRunsListResponse represents the response from listing dataset runs.
@@ -191,12 +191,12 @@ func (c *DatasetsClient) DeleteRun(ctx context.Context, datasetName string, runN
 
 // CreateDatasetRunItemRequest represents a request to create a dataset run item.
 type CreateDatasetRunItemRequest struct {
-	DatasetItemID  string                 `json:"datasetItemId"`
-	RunName        string                 `json:"runName"`
-	RunDescription string                 `json:"runDescription,omitempty"`
-	TraceID        string                 `json:"traceId,omitempty"`
-	ObservationID  string                 `json:"observationId,omitempty"`
-	Metadata       map[string]interface{} `json:"metadata,omitempty"`
+	DatasetItemID  string   `json:"datasetItemId"`
+	RunName        string   `json:"runName"`
+	RunDescription string   `json:"runDescription,omitempty"`
+	TraceID        string   `json:"traceId,omitempty"`
+	ObservationID  string   `json:"observationId,omitempty"`
+	Metadata       Metadata `json:"metadata,omitempty"`
 }
 
 // CreateRunItem creates a dataset run item (links a trace/observation to a dataset item).
@@ -212,7 +212,7 @@ func (c *DatasetsClient) CreateRunItem(ctx context.Context, req *CreateDatasetRu
 	}
 
 	var result DatasetRunItem
-	err := c.client.http.post(ctx, "/dataset-run-items", req, &result)
+	err := c.client.http.post(ctx, endpoints.DatasetRuns, req, &result)
 	if err != nil {
 		return nil, err
 	}

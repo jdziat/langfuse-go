@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
+	"strings"
 )
 
 // PromptsClient handles prompt-related API operations.
@@ -43,14 +44,14 @@ func (c *PromptsClient) List(ctx context.Context, params *PromptsListParams) (*P
 	}
 
 	var result PromptsListResponse
-	err := c.client.http.get(ctx, "/v2/prompts", query, &result)
+	err := c.client.http.get(ctx, endpoints.Prompts, query, &result)
 	if err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
-// GetParams represents parameters for getting a prompt.
+// GetPromptParams represents parameters for getting a prompt.
 type GetPromptParams struct {
 	Version int
 	Label   string
@@ -69,7 +70,7 @@ func (c *PromptsClient) Get(ctx context.Context, name string, params *GetPromptP
 	}
 
 	var result Prompt
-	err := c.client.http.get(ctx, fmt.Sprintf("/v2/prompts/%s", name), query, &result)
+	err := c.client.http.get(ctx, fmt.Sprintf("%s/%s", endpoints.Prompts, name), query, &result)
 	if err != nil {
 		return nil, err
 	}
@@ -93,12 +94,12 @@ func (c *PromptsClient) GetByLabel(ctx context.Context, name string, label strin
 
 // CreatePromptRequest represents a request to create a prompt.
 type CreatePromptRequest struct {
-	Name   string                 `json:"name"`
-	Prompt interface{}            `json:"prompt"`
-	Type   string                 `json:"type,omitempty"`
-	Config map[string]interface{} `json:"config,omitempty"`
-	Labels []string               `json:"labels,omitempty"`
-	Tags   []string               `json:"tags,omitempty"`
+	Name   string         `json:"name"`
+	Prompt any            `json:"prompt"`
+	Type   string         `json:"type,omitempty"`
+	Config map[string]any `json:"config,omitempty"`
+	Labels []string       `json:"labels,omitempty"`
+	Tags   []string       `json:"tags,omitempty"`
 }
 
 // Create creates a new prompt.
@@ -114,7 +115,7 @@ func (c *PromptsClient) Create(ctx context.Context, req *CreatePromptRequest) (*
 	}
 
 	var result Prompt
-	err := c.client.http.post(ctx, "/v2/prompts", req, &result)
+	err := c.client.http.post(ctx, endpoints.Prompts, req, &result)
 	if err != nil {
 		return nil, err
 	}
@@ -151,30 +152,49 @@ func (p *Prompt) Compile(variables map[string]string) (string, error) {
 	result := promptStr
 	for key, value := range variables {
 		placeholder := "{{" + key + "}}"
-		result = replaceAll(result, placeholder, value)
+		result = strings.ReplaceAll(result, placeholder, value)
 	}
 	return result, nil
 }
 
 // CompileChatMessages compiles chat messages with variables.
+// Returns all successfully compiled messages along with any errors encountered.
+// If errors occurred, a CompilationError is returned containing all individual errors.
 func (p *Prompt) CompileChatMessages(variables map[string]string) ([]ChatMessage, error) {
-	messages, ok := p.Prompt.([]interface{})
+	messages, ok := p.Prompt.([]any)
 	if !ok {
 		return nil, NewValidationError("prompt", "prompt is not a chat prompt")
 	}
 
+	var errs []error
 	result := make([]ChatMessage, 0, len(messages))
-	for _, msg := range messages {
-		msgMap, ok := msg.(map[string]interface{})
+
+	for i, msg := range messages {
+		msgMap, ok := msg.(map[string]any)
 		if !ok {
+			errs = append(errs, fmt.Errorf("message %d: expected object, got %T", i, msg))
 			continue
 		}
-		role, _ := msgMap["role"].(string)
-		content, _ := msgMap["content"].(string)
 
+		role, roleOk := msgMap["role"].(string)
+		if !roleOk {
+			errs = append(errs, fmt.Errorf("message %d: missing or invalid 'role' field", i))
+		}
+
+		content, contentOk := msgMap["content"].(string)
+		if !contentOk {
+			errs = append(errs, fmt.Errorf("message %d: missing or invalid 'content' field", i))
+		}
+
+		// Skip messages with missing required fields
+		if !roleOk || !contentOk {
+			continue
+		}
+
+		// Apply variable substitution
 		for key, value := range variables {
 			placeholder := "{{" + key + "}}"
-			content = replaceAll(content, placeholder, value)
+			content = strings.ReplaceAll(content, placeholder, value)
 		}
 
 		result = append(result, ChatMessage{
@@ -182,31 +202,9 @@ func (p *Prompt) CompileChatMessages(variables map[string]string) ([]ChatMessage
 			Content: content,
 		})
 	}
+
+	if len(errs) > 0 {
+		return result, &CompilationError{Errors: errs}
+	}
 	return result, nil
-}
-
-// replaceAll replaces all occurrences of old with new in s.
-func replaceAll(s, old, new string) string {
-	if old == "" {
-		return s
-	}
-	result := ""
-	for {
-		i := indexOf(s, old)
-		if i == -1 {
-			return result + s
-		}
-		result += s[:i] + new
-		s = s[i+len(old):]
-	}
-}
-
-// indexOf returns the index of substr in s, or -1 if not found.
-func indexOf(s, substr string) int {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return i
-		}
-	}
-	return -1
 }

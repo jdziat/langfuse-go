@@ -35,7 +35,7 @@ func (c *ObservationsClient) List(ctx context.Context, params *ObservationsListP
 	}
 
 	var result ObservationsListResponse
-	err := c.client.http.get(ctx, "/observations", query, &result)
+	err := c.client.http.get(ctx, endpoints.Observations, query, &result)
 	if err != nil {
 		return nil, err
 	}
@@ -45,7 +45,7 @@ func (c *ObservationsClient) List(ctx context.Context, params *ObservationsListP
 // Get retrieves a single observation by ID.
 func (c *ObservationsClient) Get(ctx context.Context, observationID string) (*Observation, error) {
 	var result Observation
-	err := c.client.http.get(ctx, fmt.Sprintf("/observations/%s", observationID), nil, &result)
+	err := c.client.http.get(ctx, fmt.Sprintf("%s/%s", endpoints.Observations, observationID), nil, &result)
 	if err != nil {
 		return nil, err
 	}
@@ -61,7 +61,7 @@ func (c *ObservationsClient) ListByTrace(ctx context.Context, traceID string, pa
 	}
 
 	var result ObservationsListResponse
-	err := c.client.http.get(ctx, "/observations", query, &result)
+	err := c.client.http.get(ctx, endpoints.Observations, query, &result)
 	if err != nil {
 		return nil, err
 	}
