@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -28,7 +29,7 @@ func TestPromptsClientList(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-test", "sk-test", WithBaseURL(server.URL))
+	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	result, err := client.Prompts().List(context.Background(), nil)
@@ -62,7 +63,7 @@ func TestPromptsClientGet(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-test", "sk-test", WithBaseURL(server.URL))
+	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	// Test GetLatest
@@ -110,7 +111,7 @@ func TestPromptsClientCreate(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-test", "sk-test", WithBaseURL(server.URL))
+	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	prompt, err := client.Prompts().Create(context.Background(), &CreatePromptRequest{
@@ -129,7 +130,7 @@ func TestPromptsClientCreate(t *testing.T) {
 }
 
 func TestPromptsClientCreateValidation(t *testing.T) {
-	client, _ := New("pk-test", "sk-test")
+	client, _ := New("pk-lf-test-key", "sk-lf-test-key")
 	defer client.Shutdown(context.Background())
 
 	// Nil request
@@ -174,7 +175,7 @@ func TestPromptsClientCreateTextPrompt(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-test", "sk-test", WithBaseURL(server.URL))
+	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	prompt, err := client.Prompts().CreateTextPrompt(
@@ -211,7 +212,7 @@ func TestPromptsClientCreateChatPrompt(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-test", "sk-test", WithBaseURL(server.URL))
+	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	messages := []ChatMessage{
@@ -292,7 +293,7 @@ func TestPromptCompileMultipleOccurrences(t *testing.T) {
 func TestPromptCompileNonTextPrompt(t *testing.T) {
 	prompt := &Prompt{
 		Name:   "chat",
-		Prompt: []interface{}{map[string]string{"role": "user", "content": "Hello"}},
+		Prompt: []any{map[string]string{"role": "user", "content": "Hello"}},
 	}
 
 	_, err := prompt.Compile(map[string]string{"name": "John"})
@@ -304,9 +305,9 @@ func TestPromptCompileNonTextPrompt(t *testing.T) {
 func TestPromptCompileChatMessages(t *testing.T) {
 	prompt := &Prompt{
 		Name: "chat",
-		Prompt: []interface{}{
-			map[string]interface{}{"role": "system", "content": "You are a {{role}}."},
-			map[string]interface{}{"role": "user", "content": "Hello {{name}}!"},
+		Prompt: []any{
+			map[string]any{"role": "system", "content": "You are a {{role}}."},
+			map[string]any{"role": "user", "content": "Hello {{name}}!"},
 		},
 	}
 
@@ -349,7 +350,146 @@ func TestPromptCompileChatMessagesNonChatPrompt(t *testing.T) {
 	}
 }
 
-func TestReplaceAll(t *testing.T) {
+func TestPromptCompileChatMessagesWithErrors(t *testing.T) {
+	t.Run("invalid message type", func(t *testing.T) {
+		prompt := &Prompt{
+			Name: "chat",
+			Prompt: []any{
+				"not a map", // invalid - should be map[string]any
+				map[string]any{"role": "user", "content": "Hello!"},
+			},
+		}
+
+		messages, err := prompt.CompileChatMessages(nil)
+		if err == nil {
+			t.Error("Expected CompilationError for invalid message type")
+		}
+
+		compErr, ok := IsCompilationError(err)
+		if !ok {
+			t.Errorf("Expected CompilationError, got %T", err)
+		}
+		if compErr != nil && len(compErr.Errors) != 1 {
+			t.Errorf("Expected 1 error, got %d", len(compErr.Errors))
+		}
+
+		// Should still return valid messages
+		if len(messages) != 1 {
+			t.Errorf("Expected 1 valid message, got %d", len(messages))
+		}
+	})
+
+	t.Run("missing role field", func(t *testing.T) {
+		prompt := &Prompt{
+			Name: "chat",
+			Prompt: []any{
+				map[string]any{"content": "Hello!"}, // missing role
+			},
+		}
+
+		messages, err := prompt.CompileChatMessages(nil)
+		if err == nil {
+			t.Error("Expected CompilationError for missing role")
+		}
+
+		compErr, ok := IsCompilationError(err)
+		if !ok {
+			t.Errorf("Expected CompilationError, got %T", err)
+		}
+		if compErr != nil {
+			errStr := compErr.Error()
+			if !strings.Contains(errStr, "role") {
+				t.Errorf("Error should mention 'role': %s", errStr)
+			}
+		}
+
+		// Should skip invalid messages
+		if len(messages) != 0 {
+			t.Errorf("Expected 0 valid messages, got %d", len(messages))
+		}
+	})
+
+	t.Run("missing content field", func(t *testing.T) {
+		prompt := &Prompt{
+			Name: "chat",
+			Prompt: []any{
+				map[string]any{"role": "user"}, // missing content
+			},
+		}
+
+		messages, err := prompt.CompileChatMessages(nil)
+		if err == nil {
+			t.Error("Expected CompilationError for missing content")
+		}
+
+		compErr, ok := IsCompilationError(err)
+		if !ok {
+			t.Errorf("Expected CompilationError, got %T", err)
+		}
+		if compErr != nil {
+			errStr := compErr.Error()
+			if !strings.Contains(errStr, "content") {
+				t.Errorf("Error should mention 'content': %s", errStr)
+			}
+		}
+
+		// Should skip invalid messages
+		if len(messages) != 0 {
+			t.Errorf("Expected 0 valid messages, got %d", len(messages))
+		}
+	})
+
+	t.Run("multiple errors", func(t *testing.T) {
+		prompt := &Prompt{
+			Name: "chat",
+			Prompt: []any{
+				map[string]any{}, // missing both role and content
+				map[string]any{"role": "user", "content": "valid"}, // valid
+				"invalid", // wrong type
+			},
+		}
+
+		messages, err := prompt.CompileChatMessages(nil)
+		if err == nil {
+			t.Error("Expected CompilationError")
+		}
+
+		compErr, ok := IsCompilationError(err)
+		if !ok {
+			t.Errorf("Expected CompilationError, got %T", err)
+		}
+		// Should have errors for: message 0 missing role, message 0 missing content, message 2 wrong type
+		if compErr != nil && len(compErr.Errors) < 3 {
+			t.Errorf("Expected at least 3 errors, got %d: %v", len(compErr.Errors), compErr.Errors)
+		}
+
+		// Should have 1 valid message
+		if len(messages) != 1 {
+			t.Errorf("Expected 1 valid message, got %d", len(messages))
+		}
+	})
+
+	t.Run("all messages valid", func(t *testing.T) {
+		prompt := &Prompt{
+			Name: "chat",
+			Prompt: []any{
+				map[string]any{"role": "system", "content": "You are helpful."},
+				map[string]any{"role": "user", "content": "Hello!"},
+			},
+		}
+
+		messages, err := prompt.CompileChatMessages(nil)
+		if err != nil {
+			t.Errorf("Unexpected error: %v", err)
+		}
+		if len(messages) != 2 {
+			t.Errorf("Expected 2 messages, got %d", len(messages))
+		}
+	})
+}
+
+func TestStringsReplaceAll(t *testing.T) {
+	// Tests to verify strings.ReplaceAll behaves as expected for our use cases
 	tests := []struct {
 		name     string
 		s        string
@@ -379,13 +519,6 @@ func TestReplaceAll(t *testing.T) {
 			expected: "Hello World!",
 		},
 		{
-			name:     "empty old string",
-			s:        "Hello World!",
-			old:      "",
-			new:      "John",
-			expected: "Hello World!",
-		},
-		{
 			name:     "empty input",
 			s:        "",
 			old:      "{{name}}",
@@ -396,16 +529,17 @@ func TestReplaceAll(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := replaceAll(tt.s, tt.old, tt.new)
+			result := strings.ReplaceAll(tt.s, tt.old, tt.new)
 			if result != tt.expected {
-				t.Errorf("replaceAll(%q, %q, %q) = %q, want %q",
+				t.Errorf("strings.ReplaceAll(%q, %q, %q) = %q, want %q",
 					tt.s, tt.old, tt.new, result, tt.expected)
 			}
 		})
 	}
 }
 
-func TestIndexOf(t *testing.T) {
+func TestStringsIndex(t *testing.T) {
+	// Tests to verify strings.Index behaves as expected for our use cases
 	tests := []struct {
 		name     string
 		s        string
@@ -446,9 +580,9 @@ func TestIndexOf(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := indexOf(tt.s, tt.substr)
+			result := strings.Index(tt.s, tt.substr)
 			if result != tt.expected {
-				t.Errorf("indexOf(%q, %q) = %d, want %d",
+				t.Errorf("strings.Index(%q, %q) = %d, want %d",
 					tt.s, tt.substr, result, tt.expected)
 			}
 		})

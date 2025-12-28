@@ -5,17 +5,60 @@ import (
 	"time"
 )
 
+// JSON is an alias for any, representing any JSON value.
+// Use this for input/output fields that accept arbitrary JSON data.
+//
+// Example:
+//
+//	trace.Generation().
+//	    Input(langfuse.JSON("What is Go?")).
+//	    Output(langfuse.JSON(map[string]any{"answer": "Go is..."})).
+//	    Create()
+type JSON = any
+
+// JSONObject is an alias for map[string]any, representing a JSON object.
+// Use this for metadata and structured data fields.
+//
+// Example:
+//
+//	trace.Generation().
+//	    Metadata(langfuse.JSONObject{"model": "gpt-4", "temperature": 0.7}).
+//	    Create()
+type JSONObject = map[string]any
+
 // Time is a custom time type that handles JSON marshaling/unmarshaling.
+// When the time is zero, it marshals to JSON null.
+// Note: The omitempty tag does NOT prevent zero times from being marshaled.
+// If you need true omitempty behavior, use *Time (pointer) instead.
 type Time struct {
 	time.Time
 }
 
+// IsZero returns true if the time is the zero value.
+// This method is used by encoding/json for omitempty checks in Go 1.18+.
+func (t Time) IsZero() bool {
+	return t.Time.IsZero()
+}
+
 // MarshalJSON implements json.Marshaler.
+// Zero times are marshaled as JSON null.
 func (t Time) MarshalJSON() ([]byte, error) {
-	if t.IsZero() {
+	if t.Time.IsZero() {
 		return []byte("null"), nil
 	}
 	return json.Marshal(t.Time.Format(time.RFC3339Nano))
+}
+
+// TimePtr returns a pointer to a Time value.
+// Use this when you need true omitempty behavior with JSON marshaling.
+func TimePtr(t time.Time) *Time {
+	return &Time{Time: t}
+}
+
+// TimeNow returns a pointer to the current time.
+// Convenience function for TimePtr(time.Now()).
+func TimeNow() *Time {
+	return &Time{Time: time.Now()}
 }
 
 // UnmarshalJSON implements json.Unmarshaler.
@@ -62,6 +105,9 @@ const (
 	ObservationTypeEvent      ObservationType = "EVENT"
 )
 
+// String returns the string representation of the observation type.
+func (o ObservationType) String() string { return string(o) }
+
 // ObservationLevel represents the severity level of an observation.
 type ObservationLevel string
 
@@ -72,6 +118,9 @@ const (
 	ObservationLevelError   ObservationLevel = "ERROR"
 )
 
+// String returns the string representation of the observation level.
+func (l ObservationLevel) String() string { return string(l) }
+
 // ScoreDataType represents the data type of a score.
 type ScoreDataType string
 
@@ -80,6 +129,9 @@ const (
 	ScoreDataTypeCategorical ScoreDataType = "CATEGORICAL"
 	ScoreDataTypeBoolean     ScoreDataType = "BOOLEAN"
 )
+
+// String returns the string representation of the score data type.
+func (s ScoreDataType) String() string { return string(s) }
 
 // ScoreSource represents the source of a score.
 type ScoreSource string
@@ -90,21 +142,84 @@ const (
 	ScoreSourceEval       ScoreSource = "EVAL"
 )
 
+// String returns the string representation of the score source.
+func (s ScoreSource) String() string { return string(s) }
+
+// Common environment constants.
+// Use these with the Environment() builder methods for consistency.
+const (
+	EnvProduction  = "production"
+	EnvDevelopment = "development"
+	EnvStaging     = "staging"
+	EnvTest        = "test"
+)
+
+// Common prompt label constants.
+// Use these with GetByLabel() for consistency.
+const (
+	LabelProduction  = "production"
+	LabelDevelopment = "development"
+	LabelStaging     = "staging"
+	LabelLatest      = "latest"
+)
+
+// Common model name constants.
+// These are provided for convenience and discoverability.
+const (
+	// OpenAI models
+	ModelGPT4          = "gpt-4"
+	ModelGPT4Turbo     = "gpt-4-turbo"
+	ModelGPT4o         = "gpt-4o"
+	ModelGPT4oMini     = "gpt-4o-mini"
+	ModelGPT35Turbo    = "gpt-3.5-turbo"
+	ModelO1            = "o1"
+	ModelO1Mini        = "o1-mini"
+	ModelO1Preview     = "o1-preview"
+	ModelO3Mini        = "o3-mini"
+	ModelTextEmbedding = "text-embedding-3-small"
+
+	// Anthropic models
+	ModelClaude3Opus    = "claude-3-opus"
+	ModelClaude3Sonnet  = "claude-3-sonnet"
+	ModelClaude3Haiku   = "claude-3-haiku"
+	ModelClaude35Sonnet = "claude-3.5-sonnet"
+	ModelClaude35Haiku  = "claude-3.5-haiku"
+	ModelClaude4Opus    = "claude-opus-4"
+	ModelClaude4Sonnet  = "claude-sonnet-4"
+
+	// Google models
+	ModelGeminiPro     = "gemini-pro"
+	ModelGemini15Pro   = "gemini-1.5-pro"
+	ModelGemini15Flash = "gemini-1.5-flash"
+	ModelGemini20Flash = "gemini-2.0-flash"
+)
+
+// PromptType represents the type of a prompt.
+type PromptType string
+
+const (
+	PromptTypeText = "text"
+	PromptTypeChat = "chat"
+)
+
+// String returns the string representation of the prompt type.
+func (p PromptType) String() string { return string(p) }
+
 // Trace represents a trace in Langfuse.
 type Trace struct {
-	ID          string                 `json:"id"`
-	Timestamp   Time                   `json:"timestamp,omitempty"`
-	Name        string                 `json:"name,omitempty"`
-	UserID      string                 `json:"userId,omitempty"`
-	Input       interface{}            `json:"input,omitempty"`
-	Output      interface{}            `json:"output,omitempty"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
-	Tags        []string               `json:"tags,omitempty"`
-	SessionID   string                 `json:"sessionId,omitempty"`
-	Release     string                 `json:"release,omitempty"`
-	Version     string                 `json:"version,omitempty"`
-	Public      bool                   `json:"public,omitempty"`
-	Environment string                 `json:"environment,omitempty"`
+	ID          string   `json:"id"`
+	Timestamp   Time     `json:"timestamp,omitempty"`
+	Name        string   `json:"name,omitempty"`
+	UserID      string   `json:"userId,omitempty"`
+	Input       any      `json:"input,omitempty"`
+	Output      any      `json:"output,omitempty"`
+	Metadata    Metadata `json:"metadata,omitempty"`
+	Tags        []string `json:"tags,omitempty"`
+	SessionID   string   `json:"sessionId,omitempty"`
+	Release     string   `json:"release,omitempty"`
+	Version     string   `json:"version,omitempty"`
+	Public      bool     `json:"public,omitempty"`
+	Environment string   `json:"environment,omitempty"`
 
 	// Read-only fields returned by the API
 	ProjectID    string  `json:"projectId,omitempty"`
@@ -121,28 +236,28 @@ type Trace struct {
 
 // Observation represents a span, generation, or event in a trace.
 type Observation struct {
-	ID                  string                 `json:"id"`
-	TraceID             string                 `json:"traceId,omitempty"`
-	Type                ObservationType        `json:"type"`
-	Name                string                 `json:"name,omitempty"`
-	StartTime           Time                   `json:"startTime,omitempty"`
-	EndTime             Time                   `json:"endTime,omitempty"`
-	CompletionStartTime Time                   `json:"completionStartTime,omitempty"`
-	Metadata            map[string]interface{} `json:"metadata,omitempty"`
-	Level               ObservationLevel       `json:"level,omitempty"`
-	StatusMessage       string                 `json:"statusMessage,omitempty"`
-	ParentObservationID string                 `json:"parentObservationId,omitempty"`
-	Version             string                 `json:"version,omitempty"`
-	Input               interface{}            `json:"input,omitempty"`
-	Output              interface{}            `json:"output,omitempty"`
-	Environment         string                 `json:"environment,omitempty"`
+	ID                  string           `json:"id"`
+	TraceID             string           `json:"traceId,omitempty"`
+	Type                ObservationType  `json:"type"`
+	Name                string           `json:"name,omitempty"`
+	StartTime           Time             `json:"startTime,omitempty"`
+	EndTime             Time             `json:"endTime,omitempty"`
+	CompletionStartTime Time             `json:"completionStartTime,omitempty"`
+	Metadata            Metadata         `json:"metadata,omitempty"`
+	Level               ObservationLevel `json:"level,omitempty"`
+	StatusMessage       string           `json:"statusMessage,omitempty"`
+	ParentObservationID string           `json:"parentObservationId,omitempty"`
+	Version             string           `json:"version,omitempty"`
+	Input               any              `json:"input,omitempty"`
+	Output              any              `json:"output,omitempty"`
+	Environment         string           `json:"environment,omitempty"`
 
 	// Generation-specific fields
-	Model           string                 `json:"model,omitempty"`
-	ModelParameters map[string]interface{} `json:"modelParameters,omitempty"`
-	Usage           *Usage                 `json:"usage,omitempty"`
-	PromptName      string                 `json:"promptName,omitempty"`
-	PromptVersion   int                    `json:"promptVersion,omitempty"`
+	Model           string         `json:"model,omitempty"`
+	ModelParameters map[string]any `json:"modelParameters,omitempty"`
+	Usage           *Usage         `json:"usage,omitempty"`
+	PromptName      string         `json:"promptName,omitempty"`
+	PromptVersion   int            `json:"promptVersion,omitempty"`
 
 	// Read-only fields
 	ProjectID            string  `json:"projectId,omitempty"`
@@ -171,18 +286,18 @@ type Usage struct {
 
 // Score represents a score attached to a trace or observation.
 type Score struct {
-	ID            string                 `json:"id,omitempty"`
-	TraceID       string                 `json:"traceId"`
-	ObservationID string                 `json:"observationId,omitempty"`
-	Name          string                 `json:"name"`
-	Value         interface{}            `json:"value"`
-	StringValue   string                 `json:"stringValue,omitempty"`
-	DataType      ScoreDataType          `json:"dataType,omitempty"`
-	Source        ScoreSource            `json:"source,omitempty"`
-	Comment       string                 `json:"comment,omitempty"`
-	ConfigID      string                 `json:"configId,omitempty"`
-	Environment   string                 `json:"environment,omitempty"`
-	Metadata      map[string]interface{} `json:"metadata,omitempty"`
+	ID            string        `json:"id,omitempty"`
+	TraceID       string        `json:"traceId"`
+	ObservationID string        `json:"observationId,omitempty"`
+	Name          string        `json:"name"`
+	Value         any           `json:"value"`
+	StringValue   string        `json:"stringValue,omitempty"`
+	DataType      ScoreDataType `json:"dataType,omitempty"`
+	Source        ScoreSource   `json:"source,omitempty"`
+	Comment       string        `json:"comment,omitempty"`
+	ConfigID      string        `json:"configId,omitempty"`
+	Environment   string        `json:"environment,omitempty"`
+	Metadata      Metadata      `json:"metadata,omitempty"`
 
 	// Read-only fields
 	ProjectID    string `json:"projectId,omitempty"`
@@ -194,14 +309,14 @@ type Score struct {
 
 // Prompt represents a prompt in Langfuse.
 type Prompt struct {
-	Name     string                 `json:"name"`
-	Version  int                    `json:"version,omitempty"`
-	Prompt   interface{}            `json:"prompt"`
-	Type     string                 `json:"type,omitempty"`
-	Config   map[string]interface{} `json:"config,omitempty"`
-	Labels   []string               `json:"labels,omitempty"`
-	Tags     []string               `json:"tags,omitempty"`
-	IsActive bool                   `json:"isActive,omitempty"`
+	Name     string         `json:"name"`
+	Version  int            `json:"version,omitempty"`
+	Prompt   any            `json:"prompt"`
+	Type     string         `json:"type,omitempty"`
+	Config   map[string]any `json:"config,omitempty"`
+	Labels   []string       `json:"labels,omitempty"`
+	Tags     []string       `json:"tags,omitempty"`
+	IsActive bool           `json:"isActive,omitempty"`
 
 	// Read-only fields
 	ID        string `json:"id,omitempty"`
@@ -237,10 +352,10 @@ type Session struct {
 
 // Dataset represents a dataset in Langfuse.
 type Dataset struct {
-	ID          string                 `json:"id,omitempty"`
-	Name        string                 `json:"name"`
-	Description string                 `json:"description,omitempty"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+	ID          string   `json:"id,omitempty"`
+	Name        string   `json:"name"`
+	Description string   `json:"description,omitempty"`
+	Metadata    Metadata `json:"metadata,omitempty"`
 
 	// Read-only fields
 	ProjectID string `json:"projectId,omitempty"`
@@ -250,14 +365,14 @@ type Dataset struct {
 
 // DatasetItem represents an item in a dataset.
 type DatasetItem struct {
-	ID                  string                 `json:"id,omitempty"`
-	DatasetName         string                 `json:"datasetName,omitempty"`
-	Input               interface{}            `json:"input,omitempty"`
-	ExpectedOutput      interface{}            `json:"expectedOutput,omitempty"`
-	Metadata            map[string]interface{} `json:"metadata,omitempty"`
-	SourceTraceID       string                 `json:"sourceTraceId,omitempty"`
-	SourceObservationID string                 `json:"sourceObservationId,omitempty"`
-	Status              string                 `json:"status,omitempty"`
+	ID                  string   `json:"id,omitempty"`
+	DatasetName         string   `json:"datasetName,omitempty"`
+	Input               any      `json:"input,omitempty"`
+	ExpectedOutput      any      `json:"expectedOutput,omitempty"`
+	Metadata            Metadata `json:"metadata,omitempty"`
+	SourceTraceID       string   `json:"sourceTraceId,omitempty"`
+	SourceObservationID string   `json:"sourceObservationId,omitempty"`
+	Status              string   `json:"status,omitempty"`
 
 	// Read-only fields
 	DatasetID string `json:"datasetId,omitempty"`
@@ -268,12 +383,12 @@ type DatasetItem struct {
 
 // DatasetRun represents a run against a dataset.
 type DatasetRun struct {
-	ID          string                 `json:"id,omitempty"`
-	Name        string                 `json:"name"`
-	Description string                 `json:"description,omitempty"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
-	DatasetID   string                 `json:"datasetId,omitempty"`
-	DatasetName string                 `json:"datasetName,omitempty"`
+	ID          string   `json:"id,omitempty"`
+	Name        string   `json:"name"`
+	Description string   `json:"description,omitempty"`
+	Metadata    Metadata `json:"metadata,omitempty"`
+	DatasetID   string   `json:"datasetId,omitempty"`
+	DatasetName string   `json:"datasetName,omitempty"`
 
 	// Read-only fields
 	ProjectID string `json:"projectId,omitempty"`
@@ -298,16 +413,16 @@ type DatasetRunItem struct {
 
 // Model represents a model definition in Langfuse.
 type Model struct {
-	ID              string                 `json:"id,omitempty"`
-	ModelName       string                 `json:"modelName"`
-	MatchPattern    string                 `json:"matchPattern,omitempty"`
-	StartDate       Time                   `json:"startDate,omitempty"`
-	InputPrice      float64                `json:"inputPrice,omitempty"`
-	OutputPrice     float64                `json:"outputPrice,omitempty"`
-	TotalPrice      float64                `json:"totalPrice,omitempty"`
-	Unit            string                 `json:"unit,omitempty"`
-	Tokenizer       string                 `json:"tokenizer,omitempty"`
-	TokenizerConfig map[string]interface{} `json:"tokenizerConfig,omitempty"`
+	ID              string         `json:"id,omitempty"`
+	ModelName       string         `json:"modelName"`
+	MatchPattern    string         `json:"matchPattern,omitempty"`
+	StartDate       Time           `json:"startDate,omitempty"`
+	InputPrice      float64        `json:"inputPrice,omitempty"`
+	OutputPrice     float64        `json:"outputPrice,omitempty"`
+	TotalPrice      float64        `json:"totalPrice,omitempty"`
+	Unit            string         `json:"unit,omitempty"`
+	Tokenizer       string         `json:"tokenizer,omitempty"`
+	TokenizerConfig map[string]any `json:"tokenizerConfig,omitempty"`
 
 	// Read-only fields
 	ProjectID         string `json:"projectId,omitempty"`

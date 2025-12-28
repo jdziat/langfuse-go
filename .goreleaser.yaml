@@ -1,0 +1,87 @@
+# GoReleaser configuration for langfuse-go
+# This is a library, not a binary application, so we skip build and archive steps
+
+version: 2
+
+before:
+  hooks:
+    # Ensure dependencies are up to date
+    - go mod tidy
+    # Run tests before release
+    - go test ./...
+
+# Skip builds since this is a library
+builds:
+  - skip: true
+
+# Skip archives since this is a library
+archives:
+  - format: binary
+
+# Generate changelog from git commits
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+      - "^chore:"
+      - "^style:"
+      - Merge pull request
+      - Merge branch
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+      order: 0
+    - title: Bug Fixes
+      regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+      order: 1
+    - title: Performance Improvements
+      regexp: '^.*?perf(\([[:word:]]+\))??!?:.+$'
+      order: 2
+    - title: Others
+      order: 999
+
+# GitHub release configuration
+release:
+  github:
+    owner: jdziat
+    name: langfuse-go
+
+  # Release name template
+  name_template: "v{{.Version}}"
+
+  # Prerelease detection
+  prerelease: auto
+
+  # Release notes
+  header: |
+    ## Langfuse Go SDK {{.Tag}}
+
+    This release includes the following changes:
+
+  footer: |
+    ## Installation
+
+    ```bash
+    go get github.com/jdziat/langfuse-go@{{.Tag}}
+    ```
+
+    ## Documentation
+
+    See the [README](https://github.com/jdziat/langfuse-go#readme) for usage examples and documentation.
+
+# Announce release
+announce:
+  skip: false
+
+# Metadata
+metadata:
+  mod_timestamp: "{{ .CommitTimestamp }}"
+
+# Checksum
+checksum:
+  name_template: 'checksums.txt'
+  algorithm: sha256

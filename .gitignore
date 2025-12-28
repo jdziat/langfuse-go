@@ -29,7 +29,8 @@ vendor/
 # OS
 .DS_Store
 Thumbs.db
-
+coverage.out
 # Environment
 .env
 .env.local
+evaluationevaluation

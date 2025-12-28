@@ -28,7 +28,7 @@ func TestScoresClientList(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-test", "sk-test", WithBaseURL(server.URL))
+	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	result, err := client.Scores().List(context.Background(), nil)
@@ -65,7 +65,7 @@ func TestScoresClientListWithParams(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-test", "sk-test", WithBaseURL(server.URL))
+	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	result, err := client.Scores().List(context.Background(), &ScoresListParams{
@@ -99,7 +99,7 @@ func TestScoresClientGet(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-test", "sk-test", WithBaseURL(server.URL))
+	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	score, err := client.Scores().Get(context.Background(), "score-123")
@@ -141,7 +141,7 @@ func TestScoresClientCreate(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-test", "sk-test", WithBaseURL(server.URL))
+	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	score, err := client.Scores().Create(context.Background(), &CreateScoreRequest{
@@ -161,7 +161,7 @@ func TestScoresClientCreate(t *testing.T) {
 }
 
 func TestScoresClientCreateValidation(t *testing.T) {
-	client, _ := New("pk-test", "sk-test")
+	client, _ := New("pk-lf-test-key", "sk-lf-test-key")
 	defer client.Shutdown(context.Background())
 
 	// Nil request
@@ -202,7 +202,7 @@ func TestScoresClientDelete(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-test", "sk-test", WithBaseURL(server.URL))
+	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	err := client.Scores().Delete(context.Background(), "score-123")
@@ -226,7 +226,7 @@ func TestScoresClientListByTrace(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-test", "sk-test", WithBaseURL(server.URL))
+	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	result, err := client.Scores().ListByTrace(context.Background(), "trace-123", nil)
@@ -254,7 +254,7 @@ func TestScoresClientListByObservation(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-test", "sk-test", WithBaseURL(server.URL))
+	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	result, err := client.Scores().ListByObservation(context.Background(), "obs-123", nil)

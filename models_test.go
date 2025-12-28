@@ -28,7 +28,7 @@ func TestModelsClientList(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-test", "sk-test", WithBaseURL(server.URL))
+	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	result, err := client.Models().List(context.Background(), nil)
@@ -59,7 +59,7 @@ func TestModelsClientListWithPagination(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-test", "sk-test", WithBaseURL(server.URL))
+	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	result, err := client.Models().List(context.Background(), &ModelsListParams{
@@ -91,7 +91,7 @@ func TestModelsClientGet(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-test", "sk-test", WithBaseURL(server.URL))
+	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	model, err := client.Models().Get(context.Background(), "model-123")
@@ -137,7 +137,7 @@ func TestModelsClientCreate(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-test", "sk-test", WithBaseURL(server.URL))
+	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	model, err := client.Models().Create(context.Background(), &CreateModelRequest{
@@ -160,7 +160,7 @@ func TestModelsClientCreate(t *testing.T) {
 }
 
 func TestModelsClientCreateValidation(t *testing.T) {
-	client, _ := New("pk-test", "sk-test")
+	client, _ := New("pk-lf-test-key", "sk-lf-test-key")
 	defer client.Shutdown(context.Background())
 
 	// Nil request
@@ -191,7 +191,7 @@ func TestModelsClientDelete(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-test", "sk-test", WithBaseURL(server.URL))
+	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	err := client.Models().Delete(context.Background(), "model-123")
@@ -204,14 +204,14 @@ func TestModelsClientDeleteNotAllowed(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusForbidden)
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		json.NewEncoder(w).Encode(map[string]any{
 			"statusCode": 403,
 			"message":    "Cannot delete Langfuse-managed models",
 		})
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-test", "sk-test", WithBaseURL(server.URL))
+	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	err := client.Models().Delete(context.Background(), "langfuse-managed-model")

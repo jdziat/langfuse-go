@@ -1,0 +1,33 @@
+#!/bin/bash
+# langfuse-hooks: post-checkout
+# Standalone hook script - copy to .git/hooks/post-checkout
+
+PREV_HEAD=$1
+NEW_HEAD=$2
+BRANCH_FLAG=$3
+
+# Only trigger for branch creation (flag=1)
+if [ "$BRANCH_FLAG" != "1" ]; then
+    exit 0
+fi
+
+# Check if langfuse-hooks is available
+if ! command -v langfuse-hooks &> /dev/null; then
+    exit 0
+fi
+
+# Check if disabled
+if [ "$LANGFUSE_HOOKS_DISABLED" = "true" ]; then
+    exit 0
+fi
+
+current_branch=$(git branch --show-current)
+
+# If branch name is generic, suggest a better name
+if echo "$current_branch" | grep -qE "^(feature|fix|temp|test|wip|new|branch)$"; then
+    echo ""
+    echo "Generic branch name detected: $current_branch"
+    echo "Tip: Use 'langfuse-hooks suggest-branch \"<description>\"' to generate a better name"
+    echo "Then rename with: git branch -m <new-name>"
+    echo ""
+fi

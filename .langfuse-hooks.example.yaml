@@ -1,0 +1,81 @@
+# Langfuse Hooks Configuration
+# Copy this file to .langfuse-hooks.yaml and customize as needed.
+
+# LLM Provider Configuration
+# Options: openai, anthropic, ollama, custom
+provider: openai
+
+# OpenAI Configuration
+openai:
+  # API key - can use environment variable reference
+  api_key: ${OPENAI_API_KEY}
+  # Model to use (gpt-4o, gpt-4-turbo, gpt-3.5-turbo)
+  model: gpt-4o
+  # Maximum tokens for response
+  max_tokens: 500
+
+# Anthropic Configuration
+anthropic:
+  api_key: ${ANTHROPIC_API_KEY}
+  # Model to use (claude-sonnet-4-20250514, claude-3-5-haiku-20241022)
+  model: claude-sonnet-4-20250514
+  max_tokens: 500
+
+# Ollama Configuration (local models)
+ollama:
+  endpoint: http://localhost:11434
+  # Model to use (llama3.2, codellama, mistral)
+  model: llama3.2
+
+# Custom OpenAI-compatible endpoint
+custom:
+  endpoint: https://api.example.com/v1/chat/completions
+  api_key: ${CUSTOM_API_KEY}
+  model: custom-model
+  max_tokens: 500
+
+# Hook Behavior Configuration
+hooks:
+  # prepare-commit-msg hook settings
+  prepare-commit-msg:
+    # Enable/disable this hook
+    enabled: true
+    # Show generated message for approval (not yet implemented)
+    interactive: true
+    # Include diff content in prompt
+    include_diff: true
+    # Maximum lines of diff to include (0 = unlimited)
+    max_diff_lines: 500
+
+  # commit-msg hook settings
+  commit-msg:
+    enabled: true
+    # Validate conventional commit format
+    validate_format: true
+    # Automatically fix non-conforming messages (requires user confirmation)
+    auto_fix: false
+
+  # Branch name suggestion settings
+  branch-suggest:
+    enabled: true
+    # Format template: {type}/{description} or {type}/{ticket}-{description}
+    format: "{type}/{description}"
+    # Maximum branch name length
+    max_length: 50
+
+# Project Context for better prompts
+context:
+  # Commit message conventions
+  conventions: |
+    - Use conventional commits: feat, fix, docs, test, refactor, perf, chore
+    - Scope examples: client, config, ingestion, traces, observations, scores, prompts, datasets, sessions, models, http, errors, hooks
+    - Reference GitHub issues when applicable (#123)
+    - Keep first line under 72 characters
+    - Use present tense ("add" not "added")
+
+  # Files to ignore in diff analysis
+  ignore_patterns:
+    - "*.generated.go"
+    - "vendor/*"
+    - "*.lock"
+    - "go.sum"
