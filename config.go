@@ -218,6 +218,11 @@ type Config struct {
 	// When true, SDK internal metrics are collected and can be exported
 	// via the Metrics interface. Requires Metrics to be set.
 	EnableMetricsRecorder bool
+
+	// EvaluationConfig configures automatic evaluation mode.
+	// When set, traces are automatically structured for LLM-as-a-Judge evaluation.
+	// This includes field flattening, automatic metadata, and evaluation tags.
+	EvaluationConfig *EvaluationConfig
 }
 
 // String returns a string representation of the config with masked credentials.
