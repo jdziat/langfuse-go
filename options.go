@@ -482,3 +482,101 @@ func WithMetricsRecorder() ConfigOption {
 		c.EnableMetricsRecorder = true
 	}
 }
+
+// WithEvaluationMode enables automatic evaluation structuring for LLM-as-a-Judge.
+// When enabled, traces are automatically prepared for evaluation without
+// requiring manual JSONPath configuration in Langfuse.
+//
+// Example:
+//
+//	client, _ := langfuse.New(pk, sk,
+//	    langfuse.WithEvaluationMode(langfuse.EvaluationModeAuto),
+//	)
+//
+// Or with RAGAS-specific formatting:
+//
+//	client, _ := langfuse.New(pk, sk,
+//	    langfuse.WithEvaluationMode(langfuse.EvaluationModeRAGAS),
+//	)
+func WithEvaluationMode(mode EvaluationMode) ConfigOption {
+	return func(c *Config) {
+		if c.EvaluationConfig == nil {
+			c.EvaluationConfig = DefaultEvaluationConfig()
+		}
+		c.EvaluationConfig.Mode = mode
+	}
+}
+
+// WithEvaluationConfig sets a complete evaluation configuration.
+// Use this for fine-grained control over evaluation behavior.
+//
+// Example:
+//
+//	client, _ := langfuse.New(pk, sk,
+//	    langfuse.WithEvaluationConfig(&langfuse.EvaluationConfig{
+//	        Mode:            langfuse.EvaluationModeAuto,
+//	        DefaultWorkflow: langfuse.WorkflowRAG,
+//	        AutoValidate:    true,
+//	        IncludeMetadata: true,
+//	        IncludeTags:     true,
+//	    }),
+//	)
+func WithEvaluationConfig(config *EvaluationConfig) ConfigOption {
+	return func(c *Config) {
+		c.EvaluationConfig = config
+	}
+}
+
+// WithDefaultWorkflow sets the default workflow type for evaluation.
+// This helps the SDK understand what fields to expect and structure.
+//
+// Example:
+//
+//	client, _ := langfuse.New(pk, sk,
+//	    langfuse.WithEvaluationMode(langfuse.EvaluationModeAuto),
+//	    langfuse.WithDefaultWorkflow(langfuse.WorkflowRAG),
+//	)
+func WithDefaultWorkflow(workflow WorkflowType) ConfigOption {
+	return func(c *Config) {
+		if c.EvaluationConfig == nil {
+			c.EvaluationConfig = DefaultEvaluationConfig()
+		}
+		c.EvaluationConfig.DefaultWorkflow = workflow
+	}
+}
+
+// WithTargetEvaluators sets the evaluators to optimize traces for.
+// The SDK will validate that required fields are present before completion.
+//
+// Example:
+//
+//	client, _ := langfuse.New(pk, sk,
+//	    langfuse.WithEvaluationMode(langfuse.EvaluationModeAuto),
+//	    langfuse.WithTargetEvaluators(
+//	        langfuse.EvaluatorFaithfulness,
+//	        langfuse.EvaluatorHallucination,
+//	    ),
+//	)
+func WithTargetEvaluators(evaluators ...EvaluatorType) ConfigOption {
+	return func(c *Config) {
+		if c.EvaluationConfig == nil {
+			c.EvaluationConfig = DefaultEvaluationConfig()
+		}
+		c.EvaluationConfig.TargetEvaluators = evaluators
+	}
+}
+
+// WithRAGASEvaluation enables evaluation mode optimized for RAGAS metrics.
+// This is a convenience function that sets up the optimal configuration
+// for Faithfulness, Answer Relevance, Context Precision, and Context Recall.
+//
+// Example:
+//
+//	client, _ := langfuse.New(pk, sk,
+//	    langfuse.WithRAGASEvaluation(),
+//	)
+func WithRAGASEvaluation() ConfigOption {
+	return func(c *Config) {
+		c.EvaluationConfig = RAGASEvaluationConfig()
+	}
+}

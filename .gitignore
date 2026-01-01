@@ -34,3 +34,4 @@ coverage.out
 .env
 .env.local
 evaluationevaluation
+dist/
