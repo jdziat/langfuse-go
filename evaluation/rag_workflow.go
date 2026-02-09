@@ -34,11 +34,11 @@ type RAGWorkflow struct {
 	*WorkflowBuilder
 
 	// RAG-specific state
-	retrievedDocs    []string
-	retrievalScores  []float64
-	citations        []string
-	generatedAnswer  string
-	confidence       float64
+	retrievedDocs   []string
+	retrievalScores []float64
+	citations       []string
+	generatedAnswer string
+	confidence      float64
 }
 
 // NewRAGWorkflow creates a new RAG workflow builder.

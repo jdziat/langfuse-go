@@ -47,10 +47,10 @@ type WorkflowBuilder struct {
 	output      string
 
 	// Internal state
-	trace       *langfuse.TraceContext
-	evalState   *langfuse.EvalState
-	steps       []workflowStep
-	startTime   time.Time
+	trace     *langfuse.TraceContext
+	evalState *langfuse.EvalState
+	steps     []workflowStep
+	startTime time.Time
 }
 
 // workflowStep represents a step in the workflow.
@@ -362,11 +362,11 @@ func (w *WorkflowBuilder) Complete(ctx context.Context) (*WorkflowResult, error)
 	}
 
 	return &WorkflowResult{
-		Trace:               w.trace,
-		IsReady:             w.evalState.IsReady(),
+		Trace:                w.trace,
+		IsReady:              w.evalState.IsReady(),
 		CompatibleEvaluators: w.evalState.GetCompatibleEvaluators(),
-		MissingFields:       w.evalState.GetMissingFields(),
-		Duration:            time.Since(w.startTime),
+		MissingFields:        w.evalState.GetMissingFields(),
+		Duration:             time.Since(w.startTime),
 	}, nil
 }
 

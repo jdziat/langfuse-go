@@ -10,9 +10,9 @@ const EvalMetadataVersion = "1.0"
 
 // Evaluation tag prefixes.
 const (
-	EvalTagPrefix     = "eval:"
-	EvalTagReady      = "eval:ready"
-	EvalTagNotReady   = "eval:not-ready"
+	EvalTagPrefix      = "eval:"
+	EvalTagReady       = "eval:ready"
+	EvalTagNotReady    = "eval:not-ready"
 	EvalTagGroundTruth = "eval:has-ground-truth"
 )
 

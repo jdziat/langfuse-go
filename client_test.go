@@ -1606,4 +1606,3 @@ func TestClient_HandleQueueFull(t *testing.T) {
 		t.Error("expected queue full/overflow condition to be detected")
 	}
 }
-
