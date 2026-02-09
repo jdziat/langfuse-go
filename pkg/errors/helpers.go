@@ -25,15 +25,10 @@ func IsRetryable(err error) bool {
 		return false
 	}
 
-	// Check if error implements LangfuseError
+	// Check if error implements LangfuseError (includes APIError, ValidationError, ShutdownError)
 	var langfuseErr LangfuseError
 	if errors.As(err, &langfuseErr) {
 		return langfuseErr.IsRetryable()
-	}
-
-	// Check specific error types
-	if apiErr, ok := AsAPIError(err); ok {
-		return apiErr.IsRetryable()
 	}
 
 	return false
@@ -96,6 +91,17 @@ func AsCompilationError(err error) (*CompilationError, bool) {
 	var compErr *CompilationError
 	if errors.As(err, &compErr) {
 		return compErr, true
+	}
+	return nil, false
+}
+
+// AsAsyncError extracts an AsyncError from the error chain.
+// Returns the AsyncError and true if found, nil and false otherwise.
+// This follows Go's errors.As() convention.
+func AsAsyncError(err error) (*AsyncError, bool) {
+	var asyncErr *AsyncError
+	if errors.As(err, &asyncErr) {
+		return asyncErr, true
 	}
 	return nil, false
 }
@@ -195,12 +201,18 @@ func WrapErrorf(err error, format string, args ...any) error {
 	return fmt.Errorf("langfuse: %s: %w", message, err)
 }
 
-// Deprecated: IsShutdownError is deprecated, use AsShutdownError instead.
+// Deprecated: IsShutdownError is deprecated.
+// Use AsShutdownError instead:
+//
+//	if shutdownErr, ok := AsShutdownError(err); ok { ... }
 func IsShutdownError(err error) (*ShutdownError, bool) {
 	return AsShutdownError(err)
 }
 
-// Deprecated: IsCompilationError is deprecated, use AsCompilationError instead.
+// Deprecated: IsCompilationError is deprecated.
+// Use AsCompilationError instead:
+//
+//	if compErr, ok := AsCompilationError(err); ok { ... }
 func IsCompilationError(err error) (*CompilationError, bool) {
 	return AsCompilationError(err)
 }

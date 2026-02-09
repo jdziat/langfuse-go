@@ -595,3 +595,359 @@ func TestIngestionResult(t *testing.T) {
 		t.Errorf("FirstError().Error() = %q", got)
 	}
 }
+
+// TestNewAsyncErrorHandler tests creating AsyncErrorHandler with various configs.
+func TestNewAsyncErrorHandler(t *testing.T) {
+	t.Run("nil config uses defaults", func(t *testing.T) {
+		h := NewAsyncErrorHandler(nil)
+		if h == nil {
+			t.Fatal("NewAsyncErrorHandler(nil) returned nil")
+		}
+		if h.Errors == nil {
+			t.Error("Errors channel is nil")
+		}
+		// Default buffer size is 100
+		if cap(h.Errors) != 100 {
+			t.Errorf("Buffer size = %d, want 100", cap(h.Errors))
+		}
+	})
+
+	t.Run("custom buffer size", func(t *testing.T) {
+		h := NewAsyncErrorHandler(&AsyncErrorConfig{BufferSize: 50})
+		if cap(h.Errors) != 50 {
+			t.Errorf("Buffer size = %d, want 50", cap(h.Errors))
+		}
+	})
+
+	t.Run("zero buffer size uses default", func(t *testing.T) {
+		h := NewAsyncErrorHandler(&AsyncErrorConfig{BufferSize: 0})
+		if cap(h.Errors) != 100 {
+			t.Errorf("Buffer size = %d, want 100", cap(h.Errors))
+		}
+	})
+
+	t.Run("negative buffer size uses default", func(t *testing.T) {
+		h := NewAsyncErrorHandler(&AsyncErrorConfig{BufferSize: -1})
+		if cap(h.Errors) != 100 {
+			t.Errorf("Buffer size = %d, want 100", cap(h.Errors))
+		}
+	})
+}
+
+// TestAsyncErrorHandler_Handle tests error handling.
+func TestAsyncErrorHandler_Handle(t *testing.T) {
+	t.Run("handles error successfully", func(t *testing.T) {
+		h := NewAsyncErrorHandler(&AsyncErrorConfig{BufferSize: 10})
+		defer h.Close()
+
+		asyncErr := NewAsyncError(AsyncOpBatchSend, errors.New("test error"))
+		h.Handle(asyncErr)
+
+		// Check error was sent to channel
+		select {
+		case got := <-h.Errors:
+			if got != asyncErr {
+				t.Errorf("Got different error from channel")
+			}
+		case <-time.After(100 * time.Millisecond):
+			t.Error("Timeout waiting for error in channel")
+		}
+
+		// Check statistics
+		if got := h.TotalErrors(); got != 1 {
+			t.Errorf("TotalErrors() = %d, want 1", got)
+		}
+		if got := h.ErrorsByOperation(AsyncOpBatchSend); got != 1 {
+			t.Errorf("ErrorsByOperation() = %d, want 1", got)
+		}
+	})
+
+	t.Run("handles nil error gracefully", func(t *testing.T) {
+		h := NewAsyncErrorHandler(&AsyncErrorConfig{BufferSize: 10})
+		defer h.Close()
+
+		h.Handle(nil)
+
+		if got := h.TotalErrors(); got != 0 {
+			t.Errorf("TotalErrors() = %d, want 0", got)
+		}
+	})
+
+	t.Run("buffer overflow drops errors", func(t *testing.T) {
+		h := NewAsyncErrorHandler(&AsyncErrorConfig{BufferSize: 2})
+		defer h.Close()
+
+		// Fill the buffer
+		for range 2 {
+			h.Handle(NewAsyncError(AsyncOpBatchSend, errors.New("test")))
+		}
+
+		// This should be dropped
+		h.Handle(NewAsyncError(AsyncOpBatchSend, errors.New("dropped")))
+
+		if got := h.DroppedCount(); got != 1 {
+			t.Errorf("DroppedCount() = %d, want 1", got)
+		}
+		if got := h.TotalErrors(); got != 3 {
+			t.Errorf("TotalErrors() = %d, want 3", got)
+		}
+	})
+
+	t.Run("invokes error callback", func(t *testing.T) {
+		var called bool
+		var receivedErr *AsyncError
+
+		h := NewAsyncErrorHandler(&AsyncErrorConfig{
+			BufferSize: 10,
+			OnError: func(err *AsyncError) {
+				called = true
+				receivedErr = err
+			},
+		})
+		defer h.Close()
+
+		asyncErr := NewAsyncError(AsyncOpFlush, errors.New("test"))
+		h.Handle(asyncErr)
+
+		// Give callback time to execute
+		time.Sleep(10 * time.Millisecond)
+
+		if !called {
+			t.Error("OnError callback was not called")
+		}
+		if receivedErr != asyncErr {
+			t.Error("OnError received different error")
+		}
+	})
+
+	t.Run("invokes overflow callback", func(t *testing.T) {
+		var called bool
+		var droppedCount int
+
+		h := NewAsyncErrorHandler(&AsyncErrorConfig{
+			BufferSize: 1,
+			OnOverflow: func(dropped int) {
+				called = true
+				droppedCount = dropped
+			},
+		})
+		defer h.Close()
+
+		// Fill buffer
+		h.Handle(NewAsyncError(AsyncOpBatchSend, errors.New("test1")))
+		// Trigger overflow
+		h.Handle(NewAsyncError(AsyncOpBatchSend, errors.New("test2")))
+
+		// Give callback time to execute
+		time.Sleep(10 * time.Millisecond)
+
+		if !called {
+			t.Error("OnOverflow callback was not called")
+		}
+		if droppedCount != 1 {
+			t.Errorf("Dropped count = %d, want 1", droppedCount)
+		}
+	})
+}
+
+// TestAsyncErrorHandler_SetCallback tests callback setters.
+func TestAsyncErrorHandler_SetCallback(t *testing.T) {
+	h := NewAsyncErrorHandler(&AsyncErrorConfig{BufferSize: 10})
+	defer h.Close()
+
+	var called bool
+	h.SetCallback(func(err *AsyncError) {
+		called = true
+	})
+
+	h.Handle(NewAsyncError(AsyncOpFlush, errors.New("test")))
+	time.Sleep(10 * time.Millisecond)
+
+	if !called {
+		t.Error("SetCallback did not set callback")
+	}
+}
+
+// TestAsyncErrorHandler_SetOverflowCallback tests overflow callback setter.
+func TestAsyncErrorHandler_SetOverflowCallback(t *testing.T) {
+	h := NewAsyncErrorHandler(&AsyncErrorConfig{BufferSize: 1})
+	defer h.Close()
+
+	var called bool
+	h.SetOverflowCallback(func(dropped int) {
+		called = true
+	})
+
+	// Fill buffer and trigger overflow
+	h.Handle(NewAsyncError(AsyncOpBatchSend, errors.New("test1")))
+	h.Handle(NewAsyncError(AsyncOpBatchSend, errors.New("test2")))
+	time.Sleep(10 * time.Millisecond)
+
+	if !called {
+		t.Error("SetOverflowCallback did not set callback")
+	}
+}
+
+// TestAsyncErrorHandler_Drain tests draining pending errors.
+func TestAsyncErrorHandler_Drain(t *testing.T) {
+	h := NewAsyncErrorHandler(&AsyncErrorConfig{BufferSize: 10})
+	defer h.Close()
+
+	// Add some errors
+	err1 := NewAsyncError(AsyncOpBatchSend, errors.New("error1"))
+	err2 := NewAsyncError(AsyncOpFlush, errors.New("error2"))
+	err3 := NewAsyncError(AsyncOpHook, errors.New("error3"))
+
+	h.Handle(err1)
+	h.Handle(err2)
+	h.Handle(err3)
+
+	// Drain all errors
+	drained := h.Drain()
+
+	if len(drained) != 3 {
+		t.Errorf("Drained %d errors, want 3", len(drained))
+	}
+
+	// Verify channel is empty
+	if h.Pending() != 0 {
+		t.Errorf("Pending() = %d, want 0", h.Pending())
+	}
+
+	// Drain again should return empty
+	drained2 := h.Drain()
+	if len(drained2) != 0 {
+		t.Errorf("Second drain returned %d errors, want 0", len(drained2))
+	}
+}
+
+// TestAsyncErrorHandler_Statistics tests statistics methods.
+func TestAsyncErrorHandler_Statistics(t *testing.T) {
+	h := NewAsyncErrorHandler(&AsyncErrorConfig{BufferSize: 10})
+	defer h.Close()
+
+	// Handle various errors
+	h.Handle(NewAsyncError(AsyncOpBatchSend, errors.New("error1")))
+	h.Handle(NewAsyncError(AsyncOpBatchSend, errors.New("error2")))
+	h.Handle(NewAsyncError(AsyncOpFlush, errors.New("error3")))
+
+	// Test TotalErrors
+	if got := h.TotalErrors(); got != 3 {
+		t.Errorf("TotalErrors() = %d, want 3", got)
+	}
+
+	// Test ErrorsByOperation
+	if got := h.ErrorsByOperation(AsyncOpBatchSend); got != 2 {
+		t.Errorf("ErrorsByOperation(batch_send) = %d, want 2", got)
+	}
+	if got := h.ErrorsByOperation(AsyncOpFlush); got != 1 {
+		t.Errorf("ErrorsByOperation(flush) = %d, want 1", got)
+	}
+	if got := h.ErrorsByOperation(AsyncOpHook); got != 0 {
+		t.Errorf("ErrorsByOperation(hook) = %d, want 0", got)
+	}
+
+	// Test Pending
+	if got := h.Pending(); got != 3 {
+		t.Errorf("Pending() = %d, want 3", got)
+	}
+
+	// Test Stats
+	stats := h.Stats()
+	if stats.TotalErrors != 3 {
+		t.Errorf("Stats.TotalErrors = %d, want 3", stats.TotalErrors)
+	}
+	if stats.DroppedCount != 0 {
+		t.Errorf("Stats.DroppedCount = %d, want 0", stats.DroppedCount)
+	}
+	if stats.Pending != 3 {
+		t.Errorf("Stats.Pending = %d, want 3", stats.Pending)
+	}
+	if stats.BufferSize != 10 {
+		t.Errorf("Stats.BufferSize = %d, want 10", stats.BufferSize)
+	}
+}
+
+// TestWrapAsyncError tests the WrapAsyncError helper.
+func TestWrapAsyncError(t *testing.T) {
+	t.Run("wraps regular error", func(t *testing.T) {
+		err := errors.New("test error")
+		asyncErr := WrapAsyncError(AsyncOpBatchSend, err)
+
+		if asyncErr == nil {
+			t.Fatal("WrapAsyncError returned nil")
+		}
+		if asyncErr.Operation != AsyncOpBatchSend {
+			t.Errorf("Operation = %q, want %q", asyncErr.Operation, AsyncOpBatchSend)
+		}
+		if asyncErr.Err != err {
+			t.Error("Underlying error not preserved")
+		}
+	})
+
+	t.Run("returns nil for nil error", func(t *testing.T) {
+		asyncErr := WrapAsyncError(AsyncOpFlush, nil)
+		if asyncErr != nil {
+			t.Errorf("WrapAsyncError(nil) = %v, want nil", asyncErr)
+		}
+	})
+
+	t.Run("returns AsyncError as-is", func(t *testing.T) {
+		original := NewAsyncError(AsyncOpFlush, errors.New("test"))
+		wrapped := WrapAsyncError(AsyncOpBatchSend, original)
+
+		if wrapped != original {
+			t.Error("WrapAsyncError changed existing AsyncError")
+		}
+	})
+}
+
+// TestAsAsyncError tests the AsAsyncError helper.
+func TestAsAsyncError(t *testing.T) {
+	asyncErr := NewAsyncError(AsyncOpBatchSend, errors.New("test"))
+	wrapped := WrapError(asyncErr, "failed")
+
+	tests := []struct {
+		name    string
+		err     error
+		wantOK  bool
+		wantErr *AsyncError
+	}{
+		{
+			name:    "direct AsyncError",
+			err:     asyncErr,
+			wantOK:  true,
+			wantErr: asyncErr,
+		},
+		{
+			name:    "wrapped AsyncError",
+			err:     wrapped,
+			wantOK:  true,
+			wantErr: asyncErr,
+		},
+		{
+			name:    "non-AsyncError",
+			err:     ErrClientClosed,
+			wantOK:  false,
+			wantErr: nil,
+		},
+		{
+			name:    "nil error",
+			err:     nil,
+			wantOK:  false,
+			wantErr: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := AsAsyncError(tt.err)
+			if ok != tt.wantOK {
+				t.Errorf("AsAsyncError() ok = %v, want %v", ok, tt.wantOK)
+			}
+			if got != tt.wantErr {
+				t.Errorf("AsAsyncError() = %v, want %v", got, tt.wantErr)
+			}
+		})
+	}
+}
