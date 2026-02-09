@@ -321,6 +321,44 @@ func (c *Client) ScoresWithOptions(opts ...ScoresOption) *ConfiguredScoresClient
 	}
 }
 
+// SessionsWithOptions returns a configured sessions sub-client.
+// Options allow setting defaults like timeout.
+//
+// Example:
+//
+//	sessions := client.SessionsWithOptions(
+//	    langfuse.WithSessionsTimeout(10 * time.Second),
+//	)
+func (c *Client) SessionsWithOptions(opts ...SessionsOption) *ConfiguredSessionsClient {
+	cfg := &sessionsConfig{}
+	for _, opt := range opts {
+		opt(cfg)
+	}
+	return &ConfiguredSessionsClient{
+		SessionsClient: c.sessions,
+		config:         cfg,
+	}
+}
+
+// ModelsWithOptions returns a configured models sub-client.
+// Options allow setting defaults like timeout.
+//
+// Example:
+//
+//	models := client.ModelsWithOptions(
+//	    langfuse.WithModelsTimeout(10 * time.Second),
+//	)
+func (c *Client) ModelsWithOptions(opts ...ModelsOption) *ConfiguredModelsClient {
+	cfg := &modelsConfig{}
+	for _, opt := range opts {
+		opt(cfg)
+	}
+	return &ConfiguredModelsClient{
+		ModelsClient: c.models,
+		config:       cfg,
+	}
+}
+
 // CircuitBreakerState returns the current state of the circuit breaker.
 // Returns CircuitClosed if no circuit breaker is configured.
 func (c *Client) CircuitBreakerState() CircuitState {

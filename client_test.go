@@ -1067,6 +1067,36 @@ func TestClientWithOptions(t *testing.T) {
 			t.Errorf("DefaultSource() = %q, want %q", configured.DefaultSource(), "evaluation-pipeline")
 		}
 	})
+
+	t.Run("SessionsWithOptions", func(t *testing.T) {
+		configured := client.SessionsWithOptions(
+			WithSessionsTimeout(10 * time.Second),
+		)
+		if configured == nil {
+			t.Fatal("SessionsWithOptions returned nil")
+		}
+		if configured.config == nil {
+			t.Error("config should be set")
+		}
+		if configured.config.defaultTimeout != 10*time.Second {
+			t.Errorf("defaultTimeout = %v, want %v", configured.config.defaultTimeout, 10*time.Second)
+		}
+	})
+
+	t.Run("ModelsWithOptions", func(t *testing.T) {
+		configured := client.ModelsWithOptions(
+			WithModelsTimeout(10 * time.Second),
+		)
+		if configured == nil {
+			t.Fatal("ModelsWithOptions returned nil")
+		}
+		if configured.config == nil {
+			t.Error("config should be set")
+		}
+		if configured.config.defaultTimeout != 10*time.Second {
+			t.Errorf("defaultTimeout = %v, want %v", configured.config.defaultTimeout, 10*time.Second)
+		}
+	})
 }
 
 // TestShutdownDrainsAllEvents verifies that graceful shutdown drains all pending events

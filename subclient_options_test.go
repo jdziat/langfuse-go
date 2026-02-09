@@ -323,3 +323,27 @@ func TestConfiguredScoresClient(t *testing.T) {
 		t.Errorf("DefaultSource() = %q, want %q", client.DefaultSource(), "evaluation")
 	}
 }
+
+func TestSessionsOptions(t *testing.T) {
+	t.Run("WithSessionsTimeout", func(t *testing.T) {
+		cfg := &sessionsConfig{}
+		opt := WithSessionsTimeout(10 * time.Second)
+		opt(cfg)
+
+		if cfg.defaultTimeout != 10*time.Second {
+			t.Errorf("defaultTimeout = %v, want %v", cfg.defaultTimeout, 10*time.Second)
+		}
+	})
+}
+
+func TestModelsOptions(t *testing.T) {
+	t.Run("WithModelsTimeout", func(t *testing.T) {
+		cfg := &modelsConfig{}
+		opt := WithModelsTimeout(10 * time.Second)
+		opt(cfg)
+
+		if cfg.defaultTimeout != 10*time.Second {
+			t.Errorf("defaultTimeout = %v, want %v", cfg.defaultTimeout, 10*time.Second)
+		}
+	})
+}
