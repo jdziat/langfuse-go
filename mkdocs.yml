@@ -1,0 +1,33 @@
+site_name: Langfuse Go SDK
+site_url: https://jdziat.github.io/langfuse-go
+repo_url: https://github.com/jdziat/langfuse-go
+repo_name: jdziat/langfuse-go
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - search.suggest
+    - content.code.copy
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - Configuration: configuration.md
+  - Tracing: tracing.md
+  - Evaluation: evaluation.md
+  - API Reference: api-reference.md
+  - Migration Guide: migration.md
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - admonition
+  - tables
