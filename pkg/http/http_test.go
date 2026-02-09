@@ -3,6 +3,7 @@ package http
 import (
 	"errors"
 	"net/url"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -570,14 +571,14 @@ func TestIsRetryableNetworkError(t *testing.T) {
 
 // TestCircuitBreakerWithOptions tests NewCircuitBreakerWithOptions.
 func TestCircuitBreakerWithOptions(t *testing.T) {
-	stateChanges := 0
+	var stateChanges atomic.Int32
 	cb := NewCircuitBreakerWithOptions(
 		WithFailureThreshold(3),
 		WithSuccessThreshold(1),
 		WithCircuitTimeout(50*time.Millisecond),
 		WithHalfOpenMaxRequests(2),
 		WithStateChangeCallback(func(from, to CircuitState) {
-			stateChanges++
+			stateChanges.Add(1)
 		}),
 	)
 
@@ -597,7 +598,7 @@ func TestCircuitBreakerWithOptions(t *testing.T) {
 	// Give callback goroutine time to execute
 	time.Sleep(10 * time.Millisecond)
 
-	if stateChanges == 0 {
+	if stateChanges.Load() == 0 {
 		t.Error("OnStateChange callback was not called")
 	}
 }
