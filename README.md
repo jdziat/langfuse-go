@@ -15,6 +15,8 @@ Go SDK for [Langfuse](https://langfuse.com) - the open-source LLM observability 
 - **Concurrent-Safe**: Thread-safe operations for high-performance applications
 - **Fluent Builder API**: Intuitive and chainable method calls
 - **Full API Coverage**: Support for traces, spans, generations, events, scores, prompts, datasets, and more
+- **Enhanced Metadata**: Rich utility methods for type-safe metadata operations
+- **Go-Conventional Errors**: Standard error handling with As* helpers
 
 ## Installation
 
@@ -128,13 +130,16 @@ Spans represent units of work within a trace:
 ```go
 ctx := context.Background()
 
+// Create metadata with utility methods
+meta := langfuse.NewMetadata().
+    Set("step", "preprocessing").
+    Set("version", "2.0")
+
 // Create a span for preprocessing
 span, err := trace.Span().
     Name("preprocess-input").
     Input("raw user input").
-    Metadata(map[string]interface{}{
-        "step": "preprocessing",
-    }).
+    Metadata(meta).
     Create(ctx)
 if err != nil {
     log.Fatalf("Failed to create span: %v", err)
@@ -239,6 +244,25 @@ run, err := client.Datasets().CreateRun(ctx, &langfuse.DatasetRun{
 })
 ```
 
+## Package Structure
+
+The SDK is organized into focused modules for maintainability:
+
+```
+langfuse-go/
+├── client.go          # Main client and API entry point
+├── lifecycle.go       # Client lifecycle (initialization, shutdown)
+├── batching.go        # Event batching logic
+├── queue.go           # Async event queue management
+├── errors_api.go      # API error types (APIError)
+├── errors_async.go    # Async/batch error types (IngestionError, ShutdownError)
+├── errors_validation.go  # Validation error types
+├── errors_helpers.go  # Go-conventional As* error helpers
+├── helpers.go         # Metadata utilities and tracing helpers
+├── pkg/config/        # Layered configuration types
+└── ...                # Sub-clients, builders, and more
+```
+
 ## API Reference
 
 ### Core Components
@@ -267,6 +291,14 @@ client.Models()                // Access models client
 client.Health(ctx)             // Check API health
 client.Flush(ctx)              // Force flush pending events
 client.Shutdown(ctx)           // Flush and close client
+
+// Configured sub-clients (see "Configured Sub-clients" section)
+client.PromptsWithOptions(...)
+client.TracesWithOptions(...)
+client.DatasetsWithOptions(...)
+client.ScoresWithOptions(...)
+client.SessionsWithOptions(...)
+client.ModelsWithOptions(...)
 ```
 
 ### Configuration Constants
@@ -290,25 +322,187 @@ langfuse.ScoreDataTypeBoolean
 
 ## Error Handling
 
-The SDK uses explicit error handling following Go conventions:
+The SDK provides Go-conventional error handling with type extraction helpers:
+
+### Using As* Helper Functions
+
+The SDK provides `As*` helper functions that follow Go's `errors.As()` convention:
 
 ```go
-ctx := context.Background()
-
 trace, err := client.NewTrace().Name("example").Create(ctx)
 if err != nil {
-    if errors.Is(err, langfuse.ErrClientClosed) {
-        // Client has been closed
-    }
-    // Check for API errors
-    var apiErr *langfuse.APIError
-    if errors.As(err, &apiErr) {
+    // Check for API errors with AsAPIError
+    if apiErr, ok := langfuse.AsAPIError(err); ok {
         if apiErr.IsRateLimited() {
-            // Handle rate limiting - use apiErr.RetryAfter for suggested delay
+            // Handle rate limiting
+            delay := apiErr.RetryAfter
+            log.Printf("Rate limited, retry after %v", delay)
         }
+        log.Printf("API error %d: %s", apiErr.StatusCode, apiErr.Message)
     }
-    // Handle error
+
+    // Check for validation errors
+    if valErr, ok := langfuse.AsValidationError(err); ok {
+        log.Printf("Validation failed: %v", valErr.Fields)
+    }
+
+    // Check for async/batch errors
+    if ingErr, ok := langfuse.AsIngestionError(err); ok {
+        log.Printf("Ingestion failed: %s", ingErr.Reason)
+    }
 }
+```
+
+### Available Error Helpers
+
+```go
+langfuse.AsAPIError(err)         // Extract *APIError
+langfuse.AsValidationError(err)  // Extract *ValidationError
+langfuse.AsIngestionError(err)   // Extract *IngestionError
+langfuse.AsShutdownError(err)    // Extract *ShutdownError
+langfuse.IsRetryable(err)        // Check if error is retryable
+langfuse.RetryAfter(err)         // Get suggested retry delay
+```
+
+### Using Standard errors.Is/As
+
+You can also use Go's standard error functions:
+
+```go
+// Check sentinel errors
+if errors.Is(err, langfuse.ErrClientClosed) {
+    // Client has been closed
+}
+
+// Type assertion with errors.As
+var apiErr *langfuse.APIError
+if errors.As(err, &apiErr) {
+    if apiErr.IsRateLimited() {
+        time.Sleep(apiErr.RetryAfter)
+        // Retry operation
+    }
+}
+```
+
+## Metadata Utilities
+
+The `Metadata` type provides rich utility methods for type-safe metadata operations:
+
+### Basic Operations
+
+```go
+// Create and set values
+meta := langfuse.NewMetadata()
+meta.Set("user", "alice").Set("version", "1.0")
+
+// Get values with type checking
+if user, ok := meta.GetString("user"); ok {
+    log.Printf("User: %s", user)
+}
+
+if count, ok := meta.GetInt("count"); ok {
+    log.Printf("Count: %d", count)
+}
+
+// Check existence
+if meta.Has("version") {
+    version, _ := meta.GetString("version")
+    // Use version
+}
+```
+
+### Advanced Operations
+
+```go
+// Merge metadata
+defaults := langfuse.Metadata{"env": "prod", "region": "us"}
+custom := langfuse.Metadata{"region": "eu", "tier": "premium"}
+merged := defaults.Clone().Merge(custom)
+// Result: {"env": "prod", "region": "eu", "tier": "premium"}
+
+// Filter specific keys
+filtered := meta.Filter("user", "session")
+
+// Get all keys
+keys := meta.Keys()
+
+// Check if empty
+if meta.IsEmpty() {
+    log.Println("No metadata")
+}
+```
+
+### Available Methods
+
+```go
+meta.Set(key, value)          // Set a value
+meta.Get(key)                 // Get any value
+meta.GetString(key)           // Get string with type check
+meta.GetInt(key)              // Get int with type check
+meta.GetFloat(key)            // Get float64 with type check
+meta.GetBool(key)             // Get bool with type check
+meta.Has(key)                 // Check if key exists
+meta.Delete(key)              // Remove a key
+meta.Merge(other)             // Merge another metadata
+meta.Clone()                  // Create a shallow copy
+meta.Filter(keys...)          // Filter to specific keys
+meta.Keys()                   // Get all keys
+meta.Len()                    // Get number of entries
+meta.IsEmpty()                // Check if empty
+```
+
+## Configured Sub-clients
+
+Configure sub-clients with default options for repeated operations:
+
+### Prompts with Default Options
+
+```go
+// Create a configured prompts client with default label
+prompts := client.PromptsWithOptions(
+    langfuse.WithPromptsLabel("production"),
+)
+
+// All operations use the default label
+prompt, err := prompts.Get(ctx, "chat-template", nil)
+```
+
+### Sessions with Default Pagination
+
+```go
+// Configure sessions client with pagination defaults
+sessions := client.SessionsWithOptions(
+    langfuse.WithSessionsPage(1),
+    langfuse.WithSessionsLimit(50),
+)
+
+// List sessions using configured pagination
+result, err := sessions.List(ctx)
+```
+
+### Models with Filters
+
+```go
+// Configure models client with filters
+models := client.ModelsWithOptions(
+    langfuse.WithModelsPage(1),
+    langfuse.WithModelsLimit(100),
+)
+
+result, err := models.List(ctx)
+```
+
+### Available WithOptions Methods
+
+All major sub-clients support the WithOptions pattern:
+
+```go
+client.PromptsWithOptions(opts...)   // Configure prompts client
+client.TracesWithOptions(opts...)    // Configure traces client
+client.DatasetsWithOptions(opts...)  // Configure datasets client
+client.ScoresWithOptions(opts...)    // Configure scores client
+client.SessionsWithOptions(opts...)  // Configure sessions client
+client.ModelsWithOptions(opts...)    // Configure models client
 ```
 
 ## Best Practices
