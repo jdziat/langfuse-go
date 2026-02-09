@@ -511,3 +511,65 @@ func TestMetadataChaining(t *testing.T) {
 		t.Errorf("Chained Delete() should remove item, got %d", m.Len())
 	}
 }
+
+func TestMetadataFilter(t *testing.T) {
+	m := NewMetadata().
+		Set("name", "test").
+		Set("count", 42).
+		Set("enabled", true).
+		Set("extra", "data")
+
+	// Filter to keep only specific keys
+	filtered := m.Filter("name", "count")
+	if filtered.Len() != 2 {
+		t.Errorf("Filter() should return 2 items, got %d", filtered.Len())
+	}
+
+	// Check that correct keys are present
+	if name, ok := filtered.GetString("name"); !ok || name != "test" {
+		t.Errorf("Filter() should include 'name', got %v", name)
+	}
+	if count, ok := filtered.GetInt("count"); !ok || count != 42 {
+		t.Errorf("Filter() should include 'count', got %v", count)
+	}
+
+	// Check that filtered keys are not present
+	if _, ok := filtered.Get("enabled"); ok {
+		t.Error("Filter() should not include 'enabled'")
+	}
+	if _, ok := filtered.Get("extra"); ok {
+		t.Error("Filter() should not include 'extra'")
+	}
+
+	// Original metadata should be unchanged
+	if m.Len() != 4 {
+		t.Errorf("Filter() should not modify original, got %d items", m.Len())
+	}
+}
+
+func TestMetadataFilterNonExistentKeys(t *testing.T) {
+	m := NewMetadata().Set("existing", "value")
+
+	// Filter with non-existent keys
+	filtered := m.Filter("existing", "missing", "also-missing")
+
+	// Should only include the existing key
+	if filtered.Len() != 1 {
+		t.Errorf("Filter() with missing keys should return 1 item, got %d", filtered.Len())
+	}
+
+	if v, ok := filtered.GetString("existing"); !ok || v != "value" {
+		t.Errorf("Filter() should include 'existing', got %v", v)
+	}
+}
+
+func TestMetadataFilterEmpty(t *testing.T) {
+	m := NewMetadata().Set("key", "value")
+
+	// Filter with no keys
+	filtered := m.Filter()
+
+	if !filtered.IsEmpty() {
+		t.Errorf("Filter() with no keys should return empty metadata, got %d items", filtered.Len())
+	}
+}

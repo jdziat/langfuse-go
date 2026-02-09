@@ -19,7 +19,7 @@ import (
 //	    Create(ctx)
 type EvalGenerationBuilder struct {
 	*GenerationBuilder
-	evalState *EvalState
+	evalState  *EvalState
 	evalConfig *EvaluationConfig
 }
 

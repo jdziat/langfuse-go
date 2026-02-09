@@ -148,21 +148,21 @@ func (g *GenerationContext) NewEventV1(ctx context.Context, name string, opts ..
 
 // updateConfig holds the configuration for updating an entity.
 type updateConfig struct {
-	output      any
-	metadata    Metadata
-	tags        []string
-	hasTags     bool
-	input       any
-	level       ObservationLevel
-	hasLevel    bool
-	statusMsg   string
-	name        string
-	userID      string
-	sessionID   string
-	public      bool
-	hasPublic   bool
-	endTime     time.Time
-	hasEndTime  bool
+	output     any
+	metadata   Metadata
+	tags       []string
+	hasTags    bool
+	input      any
+	level      ObservationLevel
+	hasLevel   bool
+	statusMsg  string
+	name       string
+	userID     string
+	sessionID  string
+	public     bool
+	hasPublic  bool
+	endTime    time.Time
+	hasEndTime bool
 }
 
 // UpdateOption configures an update operation.

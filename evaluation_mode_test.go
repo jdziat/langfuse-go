@@ -78,9 +78,9 @@ func TestWorkflowTypeGetRequiredFields(t *testing.T) {
 
 func TestWorkflowTypeGetCompatibleEvaluators(t *testing.T) {
 	tests := []struct {
-		workflow        WorkflowType
-		minEvaluators   int
-		mustInclude     []EvaluatorType
+		workflow      WorkflowType
+		minEvaluators int
+		mustInclude   []EvaluatorType
 	}{
 		{WorkflowRAG, 4, []EvaluatorType{EvaluatorFaithfulness, EvaluatorHallucination}},
 		{WorkflowQA, 2, []EvaluatorType{EvaluatorAnswerRelevance, EvaluatorCorrectness}},

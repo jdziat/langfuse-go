@@ -1067,6 +1067,36 @@ func TestClientWithOptions(t *testing.T) {
 			t.Errorf("DefaultSource() = %q, want %q", configured.DefaultSource(), "evaluation-pipeline")
 		}
 	})
+
+	t.Run("SessionsWithOptions", func(t *testing.T) {
+		configured := client.SessionsWithOptions(
+			WithSessionsTimeout(10 * time.Second),
+		)
+		if configured == nil {
+			t.Fatal("SessionsWithOptions returned nil")
+		}
+		if configured.config == nil {
+			t.Error("config should be set")
+		}
+		if configured.config.defaultTimeout != 10*time.Second {
+			t.Errorf("defaultTimeout = %v, want %v", configured.config.defaultTimeout, 10*time.Second)
+		}
+	})
+
+	t.Run("ModelsWithOptions", func(t *testing.T) {
+		configured := client.ModelsWithOptions(
+			WithModelsTimeout(10 * time.Second),
+		)
+		if configured == nil {
+			t.Fatal("ModelsWithOptions returned nil")
+		}
+		if configured.config == nil {
+			t.Error("config should be set")
+		}
+		if configured.config.defaultTimeout != 10*time.Second {
+			t.Errorf("defaultTimeout = %v, want %v", configured.config.defaultTimeout, 10*time.Second)
+		}
+	})
 }
 
 // TestShutdownDrainsAllEvents verifies that graceful shutdown drains all pending events
@@ -1521,5 +1551,58 @@ func TestIsRetryableHelper(t *testing.T) {
 				t.Errorf("IsRetryable() = %v, want %v", got, tt.wantRetryable)
 			}
 		})
+	}
+}
+
+// TestClient_HandleQueueFull tests the queue overflow handler.
+func TestClient_HandleQueueFull(t *testing.T) {
+	var queueFullHandled bool
+	var mu sync.Mutex
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Slow response to cause queue backup
+		time.Sleep(100 * time.Millisecond)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(IngestionResult{
+			Successes: []IngestionSuccess{{ID: "1", Status: 200}},
+		})
+	}))
+	defer server.Close()
+
+	client, err := New(
+		"pk-lf-test-key",
+		"sk-lf-test-key",
+		WithBaseURL(server.URL),
+		WithBatchSize(1),
+		WithBatchQueueSize(1), // Very small queue to trigger overflow
+		WithFlushInterval(1*time.Hour),
+		WithOnBackpressure(func(state QueueState) {
+			mu.Lock()
+			if state.Level >= BackpressureOverflow {
+				queueFullHandled = true
+			}
+			mu.Unlock()
+		}),
+	)
+	if err != nil {
+		t.Fatalf("New failed: %v", err)
+	}
+	defer client.Shutdown(context.Background())
+
+	ctx := context.Background()
+	// Create many events quickly to trigger queue overflow
+	for i := 0; i < 100; i++ {
+		client.NewTrace().Name("overflow-test").Create(ctx)
+	}
+
+	// Wait for async processing
+	time.Sleep(200 * time.Millisecond)
+
+	mu.Lock()
+	handled := queueFullHandled
+	mu.Unlock()
+
+	if !handled {
+		t.Error("expected queue full/overflow condition to be detected")
 	}
 }

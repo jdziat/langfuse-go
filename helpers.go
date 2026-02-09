@@ -144,6 +144,18 @@ func (m Metadata) IsEmpty() bool {
 	return len(m) == 0
 }
 
+// Filter returns a new Metadata containing only the specified keys.
+// Keys that don't exist in the source metadata are ignored.
+func (m Metadata) Filter(keys ...string) Metadata {
+	result := make(Metadata, len(keys))
+	for _, k := range keys {
+		if v, ok := m[k]; ok {
+			result[k] = v
+		}
+	}
+	return result
+}
+
 // ============================================================================
 // Tracing Helper Functions
 // ============================================================================

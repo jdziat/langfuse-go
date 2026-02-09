@@ -11,12 +11,19 @@ updates:
       day: "monday"
       time: "09:00"
       timezone: "UTC"
+    groups:
+      minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
     open-pull-requests-limit: 5
     commit-message:
       prefix: "deps"
     labels:
       - "dependencies"
-      - "go"
+      - "automerge"
     reviewers:
       - "jdziat"
 
@@ -28,11 +35,15 @@ updates:
       day: "monday"
       time: "09:00"
       timezone: "UTC"
+    groups:
+      actions:
+        patterns:
+          - "*"
     open-pull-requests-limit: 5
     commit-message:
       prefix: "ci"
     labels:
       - "dependencies"
-      - "github-actions"
+      - "automerge"
     reviewers:
       - "jdziat"
