@@ -1,4 +1,4 @@
-package langfuse
+package langfuse_test
 
 import (
 	"context"
@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	langfuse "github.com/jdziat/langfuse-go"
 )
 
 func TestModelsClientList(t *testing.T) {
@@ -18,17 +20,17 @@ func TestModelsClientList(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(ModelsListResponse{
-			Data: []Model{
+		json.NewEncoder(w).Encode(langfuse.ModelsListResponse{
+			Data: []langfuse.Model{
 				{ID: "model-1", ModelName: "gpt-4"},
 				{ID: "model-2", ModelName: "gpt-3.5-turbo"},
 			},
-			Meta: MetaResponse{TotalItems: 2},
+			Meta: langfuse.MetaResponse{TotalItems: 2},
 		})
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key", langfuse.WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	result, err := client.Models().List(context.Background(), nil)
@@ -52,18 +54,18 @@ func TestModelsClientListWithPagination(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(ModelsListResponse{
-			Data: []Model{{ID: "model-1"}},
-			Meta: MetaResponse{Page: 2, Limit: 10, TotalItems: 15},
+		json.NewEncoder(w).Encode(langfuse.ModelsListResponse{
+			Data: []langfuse.Model{{ID: "model-1"}},
+			Meta: langfuse.MetaResponse{Page: 2, Limit: 10, TotalItems: 15},
 		})
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key", langfuse.WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
-	result, err := client.Models().List(context.Background(), &ModelsListParams{
-		PaginationParams: PaginationParams{Page: 2, Limit: 10},
+	result, err := client.Models().List(context.Background(), &langfuse.ModelsListParams{
+		PaginationParams: langfuse.PaginationParams{Page: 2, Limit: 10},
 	})
 	if err != nil {
 		t.Fatalf("List failed: %v", err)
@@ -81,7 +83,7 @@ func TestModelsClientGet(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(Model{
+		json.NewEncoder(w).Encode(langfuse.Model{
 			ID:          "model-123",
 			ModelName:   "gpt-4-custom",
 			InputPrice:  0.03,
@@ -91,7 +93,7 @@ func TestModelsClientGet(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key", langfuse.WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	model, err := client.Models().Get(context.Background(), "model-123")
@@ -116,7 +118,7 @@ func TestModelsClientCreate(t *testing.T) {
 			t.Errorf("Expected POST, got %s", r.Method)
 		}
 
-		var req CreateModelRequest
+		var req langfuse.CreateModelRequest
 		json.NewDecoder(r.Body).Decode(&req)
 
 		if req.ModelName != "my-custom-model" {
@@ -127,7 +129,7 @@ func TestModelsClientCreate(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(Model{
+		json.NewEncoder(w).Encode(langfuse.Model{
 			ID:          "model-new",
 			ModelName:   req.ModelName,
 			InputPrice:  req.InputPrice,
@@ -137,10 +139,10 @@ func TestModelsClientCreate(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key", langfuse.WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
-	model, err := client.Models().Create(context.Background(), &CreateModelRequest{
+	model, err := client.Models().Create(context.Background(), &langfuse.CreateModelRequest{
 		ModelName:    "my-custom-model",
 		MatchPattern: "my-custom-.*",
 		InputPrice:   0.001,
@@ -160,17 +162,17 @@ func TestModelsClientCreate(t *testing.T) {
 }
 
 func TestModelsClientCreateValidation(t *testing.T) {
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key")
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key")
 	defer client.Shutdown(context.Background())
 
 	// Nil request
 	_, err := client.Models().Create(context.Background(), nil)
-	if err != ErrNilRequest {
+	if err != langfuse.ErrNilRequest {
 		t.Errorf("Expected ErrNilRequest, got %v", err)
 	}
 
 	// Missing modelName
-	_, err = client.Models().Create(context.Background(), &CreateModelRequest{
+	_, err = client.Models().Create(context.Background(), &langfuse.CreateModelRequest{
 		InputPrice: 0.001,
 	})
 	if err == nil {
@@ -191,7 +193,7 @@ func TestModelsClientDelete(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key", langfuse.WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	err := client.Models().Delete(context.Background(), "model-123")
@@ -211,7 +213,7 @@ func TestModelsClientDeleteNotAllowed(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key", langfuse.WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	err := client.Models().Delete(context.Background(), "langfuse-managed-model")
@@ -219,7 +221,7 @@ func TestModelsClientDeleteNotAllowed(t *testing.T) {
 		t.Fatal("Expected error, got nil")
 	}
 
-	apiErr, ok := err.(*APIError)
+	apiErr, ok := err.(*langfuse.APIError)
 	if !ok {
 		t.Fatalf("Expected APIError, got %T", err)
 	}

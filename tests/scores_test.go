@@ -1,4 +1,4 @@
-package langfuse
+package langfuse_test
 
 import (
 	"context"
@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	langfuse "github.com/jdziat/langfuse-go"
 )
 
 func TestScoresClientList(t *testing.T) {
@@ -18,17 +20,17 @@ func TestScoresClientList(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(ScoresListResponse{
-			Data: []Score{
+		json.NewEncoder(w).Encode(langfuse.ScoresListResponse{
+			Data: []langfuse.Score{
 				{ID: "score-1", Name: "quality", Value: 0.95},
 				{ID: "score-2", Name: "relevance", Value: 0.88},
 			},
-			Meta: MetaResponse{TotalItems: 2},
+			Meta: langfuse.MetaResponse{TotalItems: 2},
 		})
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key", langfuse.WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	result, err := client.Scores().List(context.Background(), nil)
@@ -58,21 +60,21 @@ func TestScoresClientListWithParams(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(ScoresListResponse{
-			Data: []Score{{ID: "score-1"}},
-			Meta: MetaResponse{TotalItems: 1},
+		json.NewEncoder(w).Encode(langfuse.ScoresListResponse{
+			Data: []langfuse.Score{{ID: "score-1"}},
+			Meta: langfuse.MetaResponse{TotalItems: 1},
 		})
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key", langfuse.WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
-	result, err := client.Scores().List(context.Background(), &ScoresListParams{
+	result, err := client.Scores().List(context.Background(), &langfuse.ScoresListParams{
 		TraceID:  "trace-123",
 		Name:     "quality",
-		DataType: ScoreDataTypeNumeric,
-		Source:   ScoreSourceAPI,
+		DataType: langfuse.ScoreDataTypeNumeric,
+		Source:   langfuse.ScoreSourceAPI,
 	})
 	if err != nil {
 		t.Fatalf("List failed: %v", err)
@@ -90,7 +92,7 @@ func TestScoresClientGet(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(Score{
+		json.NewEncoder(w).Encode(langfuse.Score{
 			ID:      "score-123",
 			Name:    "quality",
 			Value:   0.95,
@@ -99,7 +101,7 @@ func TestScoresClientGet(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key", langfuse.WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	score, err := client.Scores().Get(context.Background(), "score-123")
@@ -121,7 +123,7 @@ func TestScoresClientCreate(t *testing.T) {
 			t.Errorf("Expected POST, got %s", r.Method)
 		}
 
-		var req CreateScoreRequest
+		var req langfuse.CreateScoreRequest
 		json.NewDecoder(r.Body).Decode(&req)
 
 		if req.TraceID != "trace-123" {
@@ -132,7 +134,7 @@ func TestScoresClientCreate(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(Score{
+		json.NewEncoder(w).Encode(langfuse.Score{
 			ID:      "score-new",
 			TraceID: req.TraceID,
 			Name:    req.Name,
@@ -141,14 +143,14 @@ func TestScoresClientCreate(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key", langfuse.WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
-	score, err := client.Scores().Create(context.Background(), &CreateScoreRequest{
+	score, err := client.Scores().Create(context.Background(), &langfuse.CreateScoreRequest{
 		TraceID:  "trace-123",
 		Name:     "quality",
 		Value:    0.95,
-		DataType: ScoreDataTypeNumeric,
+		DataType: langfuse.ScoreDataTypeNumeric,
 		Comment:  "High quality response",
 	})
 	if err != nil {
@@ -161,17 +163,17 @@ func TestScoresClientCreate(t *testing.T) {
 }
 
 func TestScoresClientCreateValidation(t *testing.T) {
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key")
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key")
 	defer client.Shutdown(context.Background())
 
 	// Nil request
 	_, err := client.Scores().Create(context.Background(), nil)
-	if err != ErrNilRequest {
+	if err != langfuse.ErrNilRequest {
 		t.Errorf("Expected ErrNilRequest, got %v", err)
 	}
 
 	// Missing traceId
-	_, err = client.Scores().Create(context.Background(), &CreateScoreRequest{
+	_, err = client.Scores().Create(context.Background(), &langfuse.CreateScoreRequest{
 		Name:  "quality",
 		Value: 0.9,
 	})
@@ -180,7 +182,7 @@ func TestScoresClientCreateValidation(t *testing.T) {
 	}
 
 	// Missing name
-	_, err = client.Scores().Create(context.Background(), &CreateScoreRequest{
+	_, err = client.Scores().Create(context.Background(), &langfuse.CreateScoreRequest{
 		TraceID: "trace-123",
 		Value:   0.9,
 	})
@@ -202,7 +204,7 @@ func TestScoresClientDelete(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key", langfuse.WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	err := client.Scores().Delete(context.Background(), "score-123")
@@ -219,14 +221,14 @@ func TestScoresClientListByTrace(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(ScoresListResponse{
-			Data: []Score{{ID: "score-1", TraceID: "trace-123"}},
-			Meta: MetaResponse{TotalItems: 1},
+		json.NewEncoder(w).Encode(langfuse.ScoresListResponse{
+			Data: []langfuse.Score{{ID: "score-1", TraceID: "trace-123"}},
+			Meta: langfuse.MetaResponse{TotalItems: 1},
 		})
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key", langfuse.WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	result, err := client.Scores().ListByTrace(context.Background(), "trace-123", nil)
@@ -247,14 +249,14 @@ func TestScoresClientListByObservation(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(ScoresListResponse{
-			Data: []Score{{ID: "score-1", ObservationID: "obs-123"}},
-			Meta: MetaResponse{TotalItems: 1},
+		json.NewEncoder(w).Encode(langfuse.ScoresListResponse{
+			Data: []langfuse.Score{{ID: "score-1", ObservationID: "obs-123"}},
+			Meta: langfuse.MetaResponse{TotalItems: 1},
 		})
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key", langfuse.WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	result, err := client.Scores().ListByObservation(context.Background(), "obs-123", nil)

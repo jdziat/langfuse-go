@@ -1,4 +1,4 @@
-package langfuse
+package langfuse_test
 
 import (
 	"context"
@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	langfuse "github.com/jdziat/langfuse-go"
 )
 
 func TestObservationsClientList(t *testing.T) {
@@ -18,17 +20,17 @@ func TestObservationsClientList(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(ObservationsListResponse{
-			Data: []Observation{
-				{ID: "obs-1", Name: "Observation 1", Type: ObservationTypeSpan},
-				{ID: "obs-2", Name: "Observation 2", Type: ObservationTypeGeneration},
+		json.NewEncoder(w).Encode(langfuse.ObservationsListResponse{
+			Data: []langfuse.Observation{
+				{ID: "obs-1", Name: "Observation 1", Type: langfuse.ObservationTypeSpan},
+				{ID: "obs-2", Name: "Observation 2", Type: langfuse.ObservationTypeGeneration},
 			},
-			Meta: MetaResponse{TotalItems: 2},
+			Meta: langfuse.MetaResponse{TotalItems: 2},
 		})
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key", langfuse.WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	result, err := client.Observations().List(context.Background(), nil)
@@ -55,18 +57,18 @@ func TestObservationsClientListWithParams(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(ObservationsListResponse{
-			Data: []Observation{{ID: "obs-1"}},
-			Meta: MetaResponse{TotalItems: 1},
+		json.NewEncoder(w).Encode(langfuse.ObservationsListResponse{
+			Data: []langfuse.Observation{{ID: "obs-1"}},
+			Meta: langfuse.MetaResponse{TotalItems: 1},
 		})
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key", langfuse.WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
-	result, err := client.Observations().List(context.Background(), &ObservationsListParams{
-		FilterParams:        FilterParams{TraceID: "trace-123", Type: "GENERATION"},
+	result, err := client.Observations().List(context.Background(), &langfuse.ObservationsListParams{
+		FilterParams:        langfuse.FilterParams{TraceID: "trace-123", Type: "GENERATION"},
 		ParentObservationID: "parent-456",
 	})
 	if err != nil {
@@ -85,17 +87,17 @@ func TestObservationsClientGet(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(Observation{
+		json.NewEncoder(w).Encode(langfuse.Observation{
 			ID:      "obs-123",
 			Name:    "Test Observation",
-			Type:    ObservationTypeGeneration,
+			Type:    langfuse.ObservationTypeGeneration,
 			TraceID: "trace-456",
 			Model:   "gpt-4",
 		})
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key", langfuse.WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	obs, err := client.Observations().Get(context.Background(), "obs-123")
@@ -106,7 +108,7 @@ func TestObservationsClientGet(t *testing.T) {
 	if obs.ID != "obs-123" {
 		t.Errorf("Expected ID obs-123, got %s", obs.ID)
 	}
-	if obs.Type != ObservationTypeGeneration {
+	if obs.Type != langfuse.ObservationTypeGeneration {
 		t.Errorf("Expected type GENERATION, got %s", obs.Type)
 	}
 	if obs.Model != "gpt-4" {
@@ -122,17 +124,17 @@ func TestObservationsClientListByTrace(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(ObservationsListResponse{
-			Data: []Observation{
+		json.NewEncoder(w).Encode(langfuse.ObservationsListResponse{
+			Data: []langfuse.Observation{
 				{ID: "obs-1", TraceID: "trace-123"},
 				{ID: "obs-2", TraceID: "trace-123"},
 			},
-			Meta: MetaResponse{TotalItems: 2},
+			Meta: langfuse.MetaResponse{TotalItems: 2},
 		})
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key", langfuse.WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	result, err := client.Observations().ListByTrace(context.Background(), "trace-123", nil)
@@ -153,16 +155,16 @@ func TestObservationsClientListSpans(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(ObservationsListResponse{
-			Data: []Observation{
-				{ID: "span-1", Type: ObservationTypeSpan},
+		json.NewEncoder(w).Encode(langfuse.ObservationsListResponse{
+			Data: []langfuse.Observation{
+				{ID: "span-1", Type: langfuse.ObservationTypeSpan},
 			},
-			Meta: MetaResponse{TotalItems: 1},
+			Meta: langfuse.MetaResponse{TotalItems: 1},
 		})
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key", langfuse.WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	result, err := client.Observations().ListSpans(context.Background(), nil)
@@ -183,16 +185,16 @@ func TestObservationsClientListGenerations(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(ObservationsListResponse{
-			Data: []Observation{
-				{ID: "gen-1", Type: ObservationTypeGeneration},
+		json.NewEncoder(w).Encode(langfuse.ObservationsListResponse{
+			Data: []langfuse.Observation{
+				{ID: "gen-1", Type: langfuse.ObservationTypeGeneration},
 			},
-			Meta: MetaResponse{TotalItems: 1},
+			Meta: langfuse.MetaResponse{TotalItems: 1},
 		})
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key", langfuse.WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	result, err := client.Observations().ListGenerations(context.Background(), nil)
@@ -213,16 +215,16 @@ func TestObservationsClientListEvents(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(ObservationsListResponse{
-			Data: []Observation{
-				{ID: "event-1", Type: ObservationTypeEvent},
+		json.NewEncoder(w).Encode(langfuse.ObservationsListResponse{
+			Data: []langfuse.Observation{
+				{ID: "event-1", Type: langfuse.ObservationTypeEvent},
 			},
-			Meta: MetaResponse{TotalItems: 1},
+			Meta: langfuse.MetaResponse{TotalItems: 1},
 		})
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key", langfuse.WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	result, err := client.Observations().ListEvents(context.Background(), nil)

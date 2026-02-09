@@ -1,4 +1,4 @@
-package langfuse
+package langfuse_test
 
 import (
 	"context"
@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	langfuse "github.com/jdziat/langfuse-go"
 )
 
 func TestPromptsClientList(t *testing.T) {
@@ -19,17 +21,17 @@ func TestPromptsClientList(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(PromptsListResponse{
-			Data: []Prompt{
+		json.NewEncoder(w).Encode(langfuse.PromptsListResponse{
+			Data: []langfuse.Prompt{
 				{Name: "prompt1", Version: 1},
 				{Name: "prompt2", Version: 2},
 			},
-			Meta: MetaResponse{TotalItems: 2},
+			Meta: langfuse.MetaResponse{TotalItems: 2},
 		})
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key", langfuse.WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	result, err := client.Prompts().List(context.Background(), nil)
@@ -52,7 +54,7 @@ func TestPromptsClientGet(t *testing.T) {
 		label := r.URL.Query().Get("label")
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(Prompt{
+		json.NewEncoder(w).Encode(langfuse.Prompt{
 			Name:    "my-prompt",
 			Version: 1,
 			Prompt:  "Hello {{name}}!",
@@ -63,7 +65,7 @@ func TestPromptsClientGet(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key", langfuse.WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	// Test GetLatest
@@ -94,7 +96,7 @@ func TestPromptsClientCreate(t *testing.T) {
 			t.Errorf("Expected POST, got %s", r.Method)
 		}
 
-		var req CreatePromptRequest
+		var req langfuse.CreatePromptRequest
 		json.NewDecoder(r.Body).Decode(&req)
 
 		if req.Name != "new-prompt" {
@@ -102,7 +104,7 @@ func TestPromptsClientCreate(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(Prompt{
+		json.NewEncoder(w).Encode(langfuse.Prompt{
 			ID:      "prompt-123",
 			Name:    req.Name,
 			Version: 1,
@@ -111,10 +113,10 @@ func TestPromptsClientCreate(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key", langfuse.WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
-	prompt, err := client.Prompts().Create(context.Background(), &CreatePromptRequest{
+	prompt, err := client.Prompts().Create(context.Background(), &langfuse.CreatePromptRequest{
 		Name:   "new-prompt",
 		Prompt: "Hello {{name}}!",
 		Type:   "text",
@@ -130,17 +132,17 @@ func TestPromptsClientCreate(t *testing.T) {
 }
 
 func TestPromptsClientCreateValidation(t *testing.T) {
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key")
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key")
 	defer client.Shutdown(context.Background())
 
 	// Nil request
 	_, err := client.Prompts().Create(context.Background(), nil)
-	if err != ErrNilRequest {
+	if err != langfuse.ErrNilRequest {
 		t.Errorf("Expected ErrNilRequest, got %v", err)
 	}
 
 	// Missing name
-	_, err = client.Prompts().Create(context.Background(), &CreatePromptRequest{
+	_, err = client.Prompts().Create(context.Background(), &langfuse.CreatePromptRequest{
 		Prompt: "Hello!",
 	})
 	if err == nil {
@@ -148,7 +150,7 @@ func TestPromptsClientCreateValidation(t *testing.T) {
 	}
 
 	// Missing prompt
-	_, err = client.Prompts().Create(context.Background(), &CreatePromptRequest{
+	_, err = client.Prompts().Create(context.Background(), &langfuse.CreatePromptRequest{
 		Name: "test",
 	})
 	if err == nil {
@@ -158,7 +160,7 @@ func TestPromptsClientCreateValidation(t *testing.T) {
 
 func TestPromptsClientCreateTextPrompt(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var req CreatePromptRequest
+		var req langfuse.CreatePromptRequest
 		json.NewDecoder(r.Body).Decode(&req)
 
 		if req.Type != "text" {
@@ -166,7 +168,7 @@ func TestPromptsClientCreateTextPrompt(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(Prompt{
+		json.NewEncoder(w).Encode(langfuse.Prompt{
 			Name:    req.Name,
 			Version: 1,
 			Prompt:  req.Prompt,
@@ -175,7 +177,7 @@ func TestPromptsClientCreateTextPrompt(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key", langfuse.WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	prompt, err := client.Prompts().CreateTextPrompt(
@@ -195,7 +197,7 @@ func TestPromptsClientCreateTextPrompt(t *testing.T) {
 
 func TestPromptsClientCreateChatPrompt(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var req CreatePromptRequest
+		var req langfuse.CreatePromptRequest
 		json.NewDecoder(r.Body).Decode(&req)
 
 		if req.Type != "chat" {
@@ -203,7 +205,7 @@ func TestPromptsClientCreateChatPrompt(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(Prompt{
+		json.NewEncoder(w).Encode(langfuse.Prompt{
 			Name:    req.Name,
 			Version: 1,
 			Prompt:  req.Prompt,
@@ -212,10 +214,10 @@ func TestPromptsClientCreateChatPrompt(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key", langfuse.WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
-	messages := []ChatMessage{
+	messages := []langfuse.ChatMessage{
 		{Role: "system", Content: "You are a helpful assistant."},
 		{Role: "user", Content: "Hello {{name}}!"},
 	}
@@ -236,7 +238,7 @@ func TestPromptsClientCreateChatPrompt(t *testing.T) {
 }
 
 func TestPromptCompile(t *testing.T) {
-	prompt := &Prompt{
+	prompt := &langfuse.Prompt{
 		Name:   "greeting",
 		Prompt: "Hello {{name}}! Welcome to {{service}}.",
 	}
@@ -256,7 +258,7 @@ func TestPromptCompile(t *testing.T) {
 }
 
 func TestPromptCompileEmptyVariables(t *testing.T) {
-	prompt := &Prompt{
+	prompt := &langfuse.Prompt{
 		Name:   "greeting",
 		Prompt: "Hello World!",
 	}
@@ -272,7 +274,7 @@ func TestPromptCompileEmptyVariables(t *testing.T) {
 }
 
 func TestPromptCompileMultipleOccurrences(t *testing.T) {
-	prompt := &Prompt{
+	prompt := &langfuse.Prompt{
 		Name:   "greeting",
 		Prompt: "{{name}} says hello to {{name}}!",
 	}
@@ -291,7 +293,7 @@ func TestPromptCompileMultipleOccurrences(t *testing.T) {
 }
 
 func TestPromptCompileNonTextPrompt(t *testing.T) {
-	prompt := &Prompt{
+	prompt := &langfuse.Prompt{
 		Name:   "chat",
 		Prompt: []any{map[string]string{"role": "user", "content": "Hello"}},
 	}
@@ -303,7 +305,7 @@ func TestPromptCompileNonTextPrompt(t *testing.T) {
 }
 
 func TestPromptCompileChatMessages(t *testing.T) {
-	prompt := &Prompt{
+	prompt := &langfuse.Prompt{
 		Name: "chat",
 		Prompt: []any{
 			map[string]any{"role": "system", "content": "You are a {{role}}."},
@@ -339,7 +341,7 @@ func TestPromptCompileChatMessages(t *testing.T) {
 }
 
 func TestPromptCompileChatMessagesNonChatPrompt(t *testing.T) {
-	prompt := &Prompt{
+	prompt := &langfuse.Prompt{
 		Name:   "text",
 		Prompt: "Hello {{name}}!",
 	}
@@ -352,7 +354,7 @@ func TestPromptCompileChatMessagesNonChatPrompt(t *testing.T) {
 
 func TestPromptCompileChatMessagesWithErrors(t *testing.T) {
 	t.Run("invalid message type", func(t *testing.T) {
-		prompt := &Prompt{
+		prompt := &langfuse.Prompt{
 			Name: "chat",
 			Prompt: []any{
 				"not a map", // invalid - should be map[string]any
@@ -365,7 +367,7 @@ func TestPromptCompileChatMessagesWithErrors(t *testing.T) {
 			t.Error("Expected CompilationError for invalid message type")
 		}
 
-		compErr, ok := IsCompilationError(err)
+		compErr, ok := langfuse.IsCompilationError(err)
 		if !ok {
 			t.Errorf("Expected CompilationError, got %T", err)
 		}
@@ -380,7 +382,7 @@ func TestPromptCompileChatMessagesWithErrors(t *testing.T) {
 	})
 
 	t.Run("missing role field", func(t *testing.T) {
-		prompt := &Prompt{
+		prompt := &langfuse.Prompt{
 			Name: "chat",
 			Prompt: []any{
 				map[string]any{"content": "Hello!"}, // missing role
@@ -392,7 +394,7 @@ func TestPromptCompileChatMessagesWithErrors(t *testing.T) {
 			t.Error("Expected CompilationError for missing role")
 		}
 
-		compErr, ok := IsCompilationError(err)
+		compErr, ok := langfuse.IsCompilationError(err)
 		if !ok {
 			t.Errorf("Expected CompilationError, got %T", err)
 		}
@@ -410,7 +412,7 @@ func TestPromptCompileChatMessagesWithErrors(t *testing.T) {
 	})
 
 	t.Run("missing content field", func(t *testing.T) {
-		prompt := &Prompt{
+		prompt := &langfuse.Prompt{
 			Name: "chat",
 			Prompt: []any{
 				map[string]any{"role": "user"}, // missing content
@@ -422,7 +424,7 @@ func TestPromptCompileChatMessagesWithErrors(t *testing.T) {
 			t.Error("Expected CompilationError for missing content")
 		}
 
-		compErr, ok := IsCompilationError(err)
+		compErr, ok := langfuse.IsCompilationError(err)
 		if !ok {
 			t.Errorf("Expected CompilationError, got %T", err)
 		}
@@ -440,10 +442,10 @@ func TestPromptCompileChatMessagesWithErrors(t *testing.T) {
 	})
 
 	t.Run("multiple errors", func(t *testing.T) {
-		prompt := &Prompt{
+		prompt := &langfuse.Prompt{
 			Name: "chat",
 			Prompt: []any{
-				map[string]any{}, // missing both role and content
+				map[string]any{},                                   // missing both role and content
 				map[string]any{"role": "user", "content": "valid"}, // valid
 				"invalid", // wrong type
 			},
@@ -454,7 +456,7 @@ func TestPromptCompileChatMessagesWithErrors(t *testing.T) {
 			t.Error("Expected CompilationError")
 		}
 
-		compErr, ok := IsCompilationError(err)
+		compErr, ok := langfuse.IsCompilationError(err)
 		if !ok {
 			t.Errorf("Expected CompilationError, got %T", err)
 		}
@@ -470,7 +472,7 @@ func TestPromptCompileChatMessagesWithErrors(t *testing.T) {
 	})
 
 	t.Run("all messages valid", func(t *testing.T) {
-		prompt := &Prompt{
+		prompt := &langfuse.Prompt{
 			Name: "chat",
 			Prompt: []any{
 				map[string]any{"role": "system", "content": "You are helpful."},

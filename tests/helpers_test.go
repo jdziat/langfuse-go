@@ -1,4 +1,4 @@
-package langfuse
+package langfuse_test
 
 import (
 	"context"
@@ -8,21 +8,23 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	langfuse "github.com/jdziat/langfuse-go"
 )
 
 func setupHelpersTestServer(t *testing.T) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(IngestionResult{
-			Successes: []IngestionSuccess{{ID: "test", Status: 200}},
+		json.NewEncoder(w).Encode(langfuse.IngestionResult{
+			Successes: []langfuse.IngestionSuccess{{ID: "test", Status: 200}},
 		})
 	}))
 }
 
-func setupHelpersTestClient(t *testing.T, serverURL string) *Client {
-	client, err := New("pk-lf-test-key", "sk-lf-test-key",
-		WithBaseURL(serverURL),
-		WithFlushInterval(1*time.Hour),
+func setupHelpersTestClient(t *testing.T, serverURL string) *langfuse.Client {
+	client, err := langfuse.New("pk-lf-test-key", "sk-lf-test-key",
+		langfuse.WithBaseURL(serverURL),
+		langfuse.WithFlushInterval(1*time.Hour),
 	)
 	if err != nil {
 		t.Fatalf("Failed to create test client: %v", err)
@@ -39,17 +41,17 @@ func TestTraceGeneration(t *testing.T) {
 
 	ctx := context.Background()
 
-	result, err := TraceGeneration(ctx, client, GenerationParams{
+	result, err := langfuse.TraceGeneration(ctx, client, langfuse.GenerationParams{
 		Name:      "test-generation",
 		Model:     "gpt-4",
 		Input:     "Hello, world!",
 		UserID:    "user-123",
 		SessionID: "session-456",
 		Tags:      []string{"test"},
-	}, func() (GenerationResult, error) {
-		return GenerationResult{
+	}, func() (langfuse.GenerationResult, error) {
+		return langfuse.GenerationResult{
 			Output: "Hello! How can I help you?",
-			Usage:  Usage{Input: 10, Output: 20},
+			Usage:  langfuse.Usage{Input: 10, Output: 20},
 		}, nil
 	})
 
@@ -75,12 +77,12 @@ func TestTraceGenerationWithError(t *testing.T) {
 	ctx := context.Background()
 	expectedErr := errors.New("LLM error")
 
-	_, err := TraceGeneration(ctx, client, GenerationParams{
+	_, err := langfuse.TraceGeneration(ctx, client, langfuse.GenerationParams{
 		Name:  "test-generation",
 		Model: "gpt-4",
 		Input: "Hello, world!",
-	}, func() (GenerationResult, error) {
-		return GenerationResult{}, expectedErr
+	}, func() (langfuse.GenerationResult, error) {
+		return langfuse.GenerationResult{}, expectedErr
 	})
 
 	if err != expectedErr {
@@ -102,7 +104,7 @@ func TestTraceSpan(t *testing.T) {
 	}
 
 	spanExecuted := false
-	err = TraceSpan(ctx, trace, "test-span", func(span *SpanContext) error {
+	err = langfuse.TraceSpan(ctx, trace, "test-span", func(span *langfuse.SpanContext) error {
 		spanExecuted = true
 		// Create a child event
 		span.NewEvent().Name("test-event").Create(ctx)
@@ -131,7 +133,7 @@ func TestTraceSpanWithError(t *testing.T) {
 	}
 
 	expectedErr := errors.New("span error")
-	err = TraceSpan(ctx, trace, "test-span", func(span *SpanContext) error {
+	err = langfuse.TraceSpan(ctx, trace, "test-span", func(span *langfuse.SpanContext) error {
 		return expectedErr
 	})
 
@@ -149,7 +151,7 @@ func TestTraceFunc(t *testing.T) {
 
 	ctx := context.Background()
 
-	result, err := TraceFunc(ctx, client, "test-func", func(trace *TraceContext) (string, error) {
+	result, err := langfuse.TraceFunc(ctx, client, "test-func", func(trace *langfuse.TraceContext) (string, error) {
 		// Create some child observations
 		trace.NewEvent().Name("step-1").Create(ctx)
 		return "success", nil
@@ -173,7 +175,7 @@ func TestTraceFuncWithError(t *testing.T) {
 	ctx := context.Background()
 	expectedErr := errors.New("function error")
 
-	result, err := TraceFunc(ctx, client, "test-func", func(trace *TraceContext) (string, error) {
+	result, err := langfuse.TraceFunc(ctx, client, "test-func", func(trace *langfuse.TraceContext) (string, error) {
 		return "", expectedErr
 	})
 
@@ -198,8 +200,8 @@ func TestWithGeneration(t *testing.T) {
 		t.Fatalf("Failed to create trace: %v", err)
 	}
 
-	gen, output, err := WithGeneration(ctx, trace, "gpt-4", "Hello!", func() (any, Usage, error) {
-		return "Hello there!", Usage{Input: 5, Output: 10}, nil
+	gen, output, err := langfuse.WithGeneration(ctx, trace, "gpt-4", "Hello!", func() (any, langfuse.Usage, error) {
+		return "Hello there!", langfuse.Usage{Input: 5, Output: 10}, nil
 	})
 
 	if err != nil {
@@ -227,8 +229,8 @@ func TestWithGenerationError(t *testing.T) {
 	}
 
 	expectedErr := errors.New("generation error")
-	gen, output, err := WithGeneration(ctx, trace, "gpt-4", "Hello!", func() (any, Usage, error) {
-		return nil, Usage{}, expectedErr
+	gen, output, err := langfuse.WithGeneration(ctx, trace, "gpt-4", "Hello!", func() (any, langfuse.Usage, error) {
+		return nil, langfuse.Usage{}, expectedErr
 	})
 
 	if err != expectedErr {
@@ -247,7 +249,7 @@ func TestWithGenerationError(t *testing.T) {
 // ============================================================================
 
 func TestNewMetadata(t *testing.T) {
-	m := NewMetadata()
+	m := langfuse.NewMetadata()
 	if m == nil {
 		t.Error("NewMetadata() should not return nil")
 	}
@@ -257,7 +259,7 @@ func TestNewMetadata(t *testing.T) {
 }
 
 func TestMetadataSetAndGet(t *testing.T) {
-	m := NewMetadata()
+	m := langfuse.NewMetadata()
 	m.Set("key", "value")
 
 	v, ok := m.Get("key")
@@ -275,7 +277,7 @@ func TestMetadataSetAndGet(t *testing.T) {
 }
 
 func TestMetadataGetString(t *testing.T) {
-	m := NewMetadata()
+	m := langfuse.NewMetadata()
 	m.Set("str", "hello")
 	m.Set("num", 42)
 
@@ -299,7 +301,7 @@ func TestMetadataGetString(t *testing.T) {
 }
 
 func TestMetadataGetInt(t *testing.T) {
-	m := NewMetadata()
+	m := langfuse.NewMetadata()
 	m.Set("int", 42)
 	m.Set("float", 3.14)
 	m.Set("int64", int64(100))
@@ -344,7 +346,7 @@ func TestMetadataGetInt(t *testing.T) {
 }
 
 func TestMetadataGetFloat(t *testing.T) {
-	m := NewMetadata()
+	m := langfuse.NewMetadata()
 	m.Set("float", 3.14)
 	m.Set("int", 42)
 	m.Set("str", "hello")
@@ -372,7 +374,7 @@ func TestMetadataGetFloat(t *testing.T) {
 }
 
 func TestMetadataGetBool(t *testing.T) {
-	m := NewMetadata()
+	m := langfuse.NewMetadata()
 	m.Set("true", true)
 	m.Set("false", false)
 	m.Set("str", "yes")
@@ -400,7 +402,7 @@ func TestMetadataGetBool(t *testing.T) {
 }
 
 func TestMetadataHas(t *testing.T) {
-	m := NewMetadata()
+	m := langfuse.NewMetadata()
 	m.Set("key", "value")
 
 	if !m.Has("key") {
@@ -412,7 +414,7 @@ func TestMetadataHas(t *testing.T) {
 }
 
 func TestMetadataDelete(t *testing.T) {
-	m := NewMetadata()
+	m := langfuse.NewMetadata()
 	m.Set("key", "value")
 	m.Delete("key")
 
@@ -422,8 +424,8 @@ func TestMetadataDelete(t *testing.T) {
 }
 
 func TestMetadataMerge(t *testing.T) {
-	m1 := NewMetadata().Set("a", 1).Set("b", 2)
-	m2 := NewMetadata().Set("b", 20).Set("c", 3)
+	m1 := langfuse.NewMetadata().Set("a", 1).Set("b", 2)
+	m2 := langfuse.NewMetadata().Set("b", 20).Set("c", 3)
 
 	m1.Merge(m2)
 
@@ -439,7 +441,7 @@ func TestMetadataMerge(t *testing.T) {
 }
 
 func TestMetadataClone(t *testing.T) {
-	m := NewMetadata().Set("key", "value")
+	m := langfuse.NewMetadata().Set("key", "value")
 	clone := m.Clone()
 
 	// Verify clone has same value
@@ -455,7 +457,7 @@ func TestMetadataClone(t *testing.T) {
 }
 
 func TestMetadataKeys(t *testing.T) {
-	m := NewMetadata().Set("a", 1).Set("b", 2).Set("c", 3)
+	m := langfuse.NewMetadata().Set("a", 1).Set("b", 2).Set("c", 3)
 	keys := m.Keys()
 
 	if len(keys) != 3 {
@@ -473,7 +475,7 @@ func TestMetadataKeys(t *testing.T) {
 }
 
 func TestMetadataLen(t *testing.T) {
-	m := NewMetadata()
+	m := langfuse.NewMetadata()
 	if m.Len() != 0 {
 		t.Errorf("Len() = %d, want 0", m.Len())
 	}
@@ -485,7 +487,7 @@ func TestMetadataLen(t *testing.T) {
 }
 
 func TestMetadataIsEmpty(t *testing.T) {
-	m := NewMetadata()
+	m := langfuse.NewMetadata()
 	if !m.IsEmpty() {
 		t.Error("IsEmpty() should return true for empty metadata")
 	}
@@ -497,7 +499,7 @@ func TestMetadataIsEmpty(t *testing.T) {
 }
 
 func TestMetadataChaining(t *testing.T) {
-	m := NewMetadata().
+	m := langfuse.NewMetadata().
 		Set("name", "test").
 		Set("count", 42).
 		Set("enabled", true)
@@ -513,7 +515,7 @@ func TestMetadataChaining(t *testing.T) {
 }
 
 func TestMetadataFilter(t *testing.T) {
-	m := NewMetadata().
+	m := langfuse.NewMetadata().
 		Set("name", "test").
 		Set("count", 42).
 		Set("enabled", true).
@@ -548,7 +550,7 @@ func TestMetadataFilter(t *testing.T) {
 }
 
 func TestMetadataFilterNonExistentKeys(t *testing.T) {
-	m := NewMetadata().Set("existing", "value")
+	m := langfuse.NewMetadata().Set("existing", "value")
 
 	// Filter with non-existent keys
 	filtered := m.Filter("existing", "missing", "also-missing")
@@ -564,7 +566,7 @@ func TestMetadataFilterNonExistentKeys(t *testing.T) {
 }
 
 func TestMetadataFilterEmpty(t *testing.T) {
-	m := NewMetadata().Set("key", "value")
+	m := langfuse.NewMetadata().Set("key", "value")
 
 	// Filter with no keys
 	filtered := m.Filter()

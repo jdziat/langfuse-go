@@ -1,8 +1,9 @@
-package langfuse
+package langfuse_test
 
 import (
 	"testing"
 
+	langfuse "github.com/jdziat/langfuse-go"
 	pkgconfig "github.com/jdziat/langfuse-go/pkg/config"
 	pkgerrors "github.com/jdziat/langfuse-go/pkg/errors"
 	pkghttp "github.com/jdziat/langfuse-go/pkg/http"
@@ -13,34 +14,34 @@ import (
 func TestFacadeTypeAliases(t *testing.T) {
 	t.Run("pkg/config exports", func(t *testing.T) {
 		// Test that environment helper functions are accessible
-		if GetEnvString == nil {
+		if langfuse.GetEnvString == nil {
 			t.Error("GetEnvString should be exported")
 		}
-		if GetEnvBool == nil {
+		if langfuse.GetEnvBool == nil {
 			t.Error("GetEnvBool should be exported")
 		}
-		if GetEnvRegion == nil {
+		if langfuse.GetEnvRegion == nil {
 			t.Error("GetEnvRegion should be exported")
 		}
 	})
 
 	t.Run("pkg/errors type aliases", func(t *testing.T) {
 		// Test type compatibility
-		var asyncErr *PkgAsyncError
+		var asyncErr *langfuse.PkgAsyncError
 		var pkgAsyncErr *pkgerrors.AsyncError
 		asyncErr = pkgAsyncErr
 		if asyncErr == nil {
 			// This is just to use the variable
 		}
 
-		var apiErr *PkgAPIError
+		var apiErr *langfuse.PkgAPIError
 		var pkgAPIErr *pkgerrors.APIError
 		apiErr = pkgAPIErr
 		if apiErr == nil {
 			// This is just to use the variable
 		}
 
-		var valErr *PkgValidationError
+		var valErr *langfuse.PkgValidationError
 		var pkgValErr *pkgerrors.ValidationError
 		valErr = pkgValErr
 		if valErr == nil {
@@ -50,14 +51,14 @@ func TestFacadeTypeAliases(t *testing.T) {
 
 	t.Run("pkg/http type aliases", func(t *testing.T) {
 		// Test type compatibility
-		var backoff *PkgExponentialBackoff
+		var backoff *langfuse.PkgExponentialBackoff
 		var pkgBackoff *pkghttp.ExponentialBackoff
 		backoff = pkgBackoff
 		if backoff == nil {
 			// This is just to use the variable
 		}
 
-		var cb *PkgCircuitBreaker
+		var cb *langfuse.PkgCircuitBreaker
 		var pkgCB *pkghttp.CircuitBreaker
 		cb = pkgCB
 		if cb == nil {
@@ -67,14 +68,14 @@ func TestFacadeTypeAliases(t *testing.T) {
 
 	t.Run("pkg/ingestion type aliases", func(t *testing.T) {
 		// Test type compatibility
-		var monitor *PkgQueueMonitor
+		var monitor *langfuse.PkgQueueMonitor
 		var pkgMonitor *pkgingestion.QueueMonitor
 		monitor = pkgMonitor
 		if monitor == nil {
 			// This is just to use the variable
 		}
 
-		var handler *PkgBackpressureHandler
+		var handler *langfuse.PkgBackpressureHandler
 		var pkgHandler *pkgingestion.BackpressureHandler
 		handler = pkgHandler
 		if handler == nil {
@@ -84,38 +85,38 @@ func TestFacadeTypeAliases(t *testing.T) {
 
 	t.Run("constructor functions", func(t *testing.T) {
 		// Test that constructor functions are accessible
-		if NewPkgExponentialBackoff == nil {
+		if langfuse.NewPkgExponentialBackoff == nil {
 			t.Error("NewPkgExponentialBackoff should be exported")
 		}
-		if NewPkgCircuitBreaker == nil {
+		if langfuse.NewPkgCircuitBreaker == nil {
 			t.Error("NewPkgCircuitBreaker should be exported")
 		}
-		if NewPkgQueueMonitor == nil {
+		if langfuse.NewPkgQueueMonitor == nil {
 			t.Error("NewPkgQueueMonitor should be exported")
 		}
-		if NewPkgBackpressureHandler == nil {
+		if langfuse.NewPkgBackpressureHandler == nil {
 			t.Error("NewPkgBackpressureHandler should be exported")
 		}
-		if PkgUUID == nil {
+		if langfuse.PkgUUID == nil {
 			t.Error("PkgUUID should be exported")
 		}
-		if PkgGenerateID == nil {
+		if langfuse.PkgGenerateID == nil {
 			t.Error("PkgGenerateID should be exported")
 		}
 	})
 
 	t.Run("helper functions", func(t *testing.T) {
 		// Test that helper functions are accessible
-		if PkgIsRetryable == nil {
+		if langfuse.PkgIsRetryable == nil {
 			t.Error("PkgIsRetryable should be exported")
 		}
-		if PkgAsAPIError == nil {
+		if langfuse.PkgAsAPIError == nil {
 			t.Error("PkgAsAPIError should be exported")
 		}
-		if PkgWrapError == nil {
+		if langfuse.PkgWrapError == nil {
 			t.Error("PkgWrapError should be exported")
 		}
-		if PkgWrapErrorf == nil {
+		if langfuse.PkgWrapErrorf == nil {
 			t.Error("PkgWrapErrorf should be exported")
 		}
 	})
@@ -125,7 +126,7 @@ func TestFacadeTypeAliases(t *testing.T) {
 func TestFacadeUsageExample(t *testing.T) {
 	t.Run("use pkg types via facade", func(t *testing.T) {
 		// Create a circuit breaker using the facade
-		cb := NewPkgCircuitBreaker(pkghttp.CircuitBreakerConfig{
+		cb := langfuse.NewPkgCircuitBreaker(pkghttp.CircuitBreakerConfig{
 			FailureThreshold: 3,
 		})
 
@@ -134,19 +135,19 @@ func TestFacadeUsageExample(t *testing.T) {
 		}
 
 		// Create a retry strategy using the facade
-		backoff := NewPkgExponentialBackoff()
+		backoff := langfuse.NewPkgExponentialBackoff()
 		if backoff == nil {
 			t.Error("expected non-nil backoff")
 		}
 
 		// Generate an ID using the facade
-		id := PkgGenerateID()
+		id := langfuse.PkgGenerateID()
 		if id == "" {
 			t.Error("expected non-empty ID")
 		}
 
 		// Use environment helpers
-		val := GetEnvString("NONEXISTENT_VAR", "default")
+		val := langfuse.GetEnvString("NONEXISTENT_VAR", "default")
 		if val != "default" {
 			t.Errorf("expected 'default', got %q", val)
 		}
@@ -154,13 +155,13 @@ func TestFacadeUsageExample(t *testing.T) {
 
 	t.Run("use pkg error helpers via facade", func(t *testing.T) {
 		// Create a validation error using pkg
-		err := NewPkgValidationError("field", "invalid value")
+		err := langfuse.NewPkgValidationError("field", "invalid value")
 		if err == nil {
 			t.Fatal("expected non-nil error")
 		}
 
 		// Extract it using the facade helper
-		valErr, ok := PkgAsValidationError(err)
+		valErr, ok := langfuse.PkgAsValidationError(err)
 		if !ok {
 			t.Error("expected to extract validation error")
 		}
@@ -169,12 +170,12 @@ func TestFacadeUsageExample(t *testing.T) {
 		}
 
 		// Test retryability
-		if PkgIsRetryable(err) {
+		if langfuse.PkgIsRetryable(err) {
 			t.Error("validation errors should not be retryable")
 		}
 
 		// Test error code
-		code := PkgErrorCodeOf(err)
+		code := langfuse.PkgErrorCodeOf(err)
 		if code != pkgerrors.ErrCodeValidation {
 			t.Errorf("expected ErrCodeValidation, got %v", code)
 		}
@@ -183,19 +184,19 @@ func TestFacadeUsageExample(t *testing.T) {
 	t.Run("use pkg config helpers", func(t *testing.T) {
 		// Test GetEnvBool
 		t.Setenv("TEST_BOOL", "true")
-		if !GetEnvBool("TEST_BOOL") {
+		if !langfuse.GetEnvBool("TEST_BOOL") {
 			t.Error("expected GetEnvBool to return true")
 		}
 
 		// Test GetEnvString
 		t.Setenv("TEST_STRING", "value")
-		if GetEnvString("TEST_STRING", "default") != "value" {
+		if langfuse.GetEnvString("TEST_STRING", "default") != "value" {
 			t.Error("expected GetEnvString to return 'value'")
 		}
 
 		// Test GetEnvRegion - note that it reads from LANGFUSE_REGION env var
 		t.Setenv("LANGFUSE_REGION", "us")
-		region := GetEnvRegion(pkgconfig.RegionEU)
+		region := langfuse.GetEnvRegion(pkgconfig.RegionEU)
 		if region != pkgconfig.RegionUS {
 			t.Errorf("expected RegionUS, got %v", region)
 		}

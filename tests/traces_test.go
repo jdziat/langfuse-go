@@ -1,4 +1,4 @@
-package langfuse
+package langfuse_test
 
 import (
 	"context"
@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	langfuse "github.com/jdziat/langfuse-go"
 )
 
 func TestTracesClientList(t *testing.T) {
@@ -27,12 +29,12 @@ func TestTracesClientList(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(TracesListResponse{
-			Data: []Trace{
+		json.NewEncoder(w).Encode(langfuse.TracesListResponse{
+			Data: []langfuse.Trace{
 				{ID: "trace-1", Name: "Trace 1"},
 				{ID: "trace-2", Name: "Trace 2"},
 			},
-			Meta: MetaResponse{
+			Meta: langfuse.MetaResponse{
 				Page:       1,
 				Limit:      10,
 				TotalItems: 2,
@@ -42,11 +44,11 @@ func TestTracesClientList(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key", langfuse.WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
-	result, err := client.Traces().List(context.Background(), &TracesListParams{
-		PaginationParams: PaginationParams{Page: 1, Limit: 10},
+	result, err := client.Traces().List(context.Background(), &langfuse.TracesListParams{
+		PaginationParams: langfuse.PaginationParams{Page: 1, Limit: 10},
 	})
 	if err != nil {
 		t.Fatalf("List failed: %v", err)
@@ -74,18 +76,18 @@ func TestTracesClientListWithFilters(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(TracesListResponse{
-			Data: []Trace{{ID: "trace-1"}},
-			Meta: MetaResponse{TotalItems: 1},
+		json.NewEncoder(w).Encode(langfuse.TracesListResponse{
+			Data: []langfuse.Trace{{ID: "trace-1"}},
+			Meta: langfuse.MetaResponse{TotalItems: 1},
 		})
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key", langfuse.WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
-	result, err := client.Traces().List(context.Background(), &TracesListParams{
-		FilterParams: FilterParams{
+	result, err := client.Traces().List(context.Background(), &langfuse.TracesListParams{
+		FilterParams: langfuse.FilterParams{
 			UserID:    "user-123",
 			SessionID: "session-456",
 			Name:      "test-trace",
@@ -103,14 +105,14 @@ func TestTracesClientListWithFilters(t *testing.T) {
 func TestTracesClientListNilParams(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(TracesListResponse{
-			Data: []Trace{},
-			Meta: MetaResponse{},
+		json.NewEncoder(w).Encode(langfuse.TracesListResponse{
+			Data: []langfuse.Trace{},
+			Meta: langfuse.MetaResponse{},
 		})
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key", langfuse.WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	result, err := client.Traces().List(context.Background(), nil)
@@ -133,7 +135,7 @@ func TestTracesClientGet(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(Trace{
+		json.NewEncoder(w).Encode(langfuse.Trace{
 			ID:        "trace-123",
 			Name:      "Test Trace",
 			UserID:    "user-456",
@@ -142,7 +144,7 @@ func TestTracesClientGet(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key", langfuse.WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	trace, err := client.Traces().Get(context.Background(), "trace-123")
@@ -169,7 +171,7 @@ func TestTracesClientGetNotFound(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key", langfuse.WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	_, err := client.Traces().Get(context.Background(), "nonexistent")
@@ -177,7 +179,7 @@ func TestTracesClientGetNotFound(t *testing.T) {
 		t.Fatal("Expected error, got nil")
 	}
 
-	apiErr, ok := err.(*APIError)
+	apiErr, ok := err.(*langfuse.APIError)
 	if !ok {
 		t.Fatalf("Expected APIError, got %T", err)
 	}
@@ -199,7 +201,7 @@ func TestTracesClientDelete(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key", langfuse.WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	err := client.Traces().Delete(context.Background(), "trace-123")

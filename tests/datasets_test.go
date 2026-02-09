@@ -1,4 +1,4 @@
-package langfuse
+package langfuse_test
 
 import (
 	"context"
@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	langfuse "github.com/jdziat/langfuse-go"
 )
 
 func TestDatasetsClientList(t *testing.T) {
@@ -18,17 +20,17 @@ func TestDatasetsClientList(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(DatasetsListResponse{
-			Data: []Dataset{
+		json.NewEncoder(w).Encode(langfuse.DatasetsListResponse{
+			Data: []langfuse.Dataset{
 				{ID: "ds-1", Name: "Dataset 1"},
 				{ID: "ds-2", Name: "Dataset 2"},
 			},
-			Meta: MetaResponse{TotalItems: 2},
+			Meta: langfuse.MetaResponse{TotalItems: 2},
 		})
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key", langfuse.WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	result, err := client.Datasets().List(context.Background(), nil)
@@ -48,7 +50,7 @@ func TestDatasetsClientGet(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(Dataset{
+		json.NewEncoder(w).Encode(langfuse.Dataset{
 			ID:          "ds-123",
 			Name:        "my-dataset",
 			Description: "Test dataset",
@@ -56,7 +58,7 @@ func TestDatasetsClientGet(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key", langfuse.WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	dataset, err := client.Datasets().Get(context.Background(), "my-dataset")
@@ -75,7 +77,7 @@ func TestDatasetsClientCreate(t *testing.T) {
 			t.Errorf("Expected POST, got %s", r.Method)
 		}
 
-		var req CreateDatasetRequest
+		var req langfuse.CreateDatasetRequest
 		json.NewDecoder(r.Body).Decode(&req)
 
 		if req.Name != "new-dataset" {
@@ -83,7 +85,7 @@ func TestDatasetsClientCreate(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(Dataset{
+		json.NewEncoder(w).Encode(langfuse.Dataset{
 			ID:          "ds-new",
 			Name:        req.Name,
 			Description: req.Description,
@@ -91,10 +93,10 @@ func TestDatasetsClientCreate(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key", langfuse.WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
-	dataset, err := client.Datasets().Create(context.Background(), &CreateDatasetRequest{
+	dataset, err := client.Datasets().Create(context.Background(), &langfuse.CreateDatasetRequest{
 		Name:        "new-dataset",
 		Description: "A new dataset",
 	})
@@ -108,17 +110,17 @@ func TestDatasetsClientCreate(t *testing.T) {
 }
 
 func TestDatasetsClientCreateValidation(t *testing.T) {
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key")
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key")
 	defer client.Shutdown(context.Background())
 
 	// Nil request
 	_, err := client.Datasets().Create(context.Background(), nil)
-	if err != ErrNilRequest {
+	if err != langfuse.ErrNilRequest {
 		t.Errorf("Expected ErrNilRequest, got %v", err)
 	}
 
 	// Missing name
-	_, err = client.Datasets().Create(context.Background(), &CreateDatasetRequest{
+	_, err = client.Datasets().Create(context.Background(), &langfuse.CreateDatasetRequest{
 		Description: "Description only",
 	})
 	if err == nil {
@@ -138,20 +140,20 @@ func TestDatasetsClientListItems(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(DatasetItemsListResponse{
-			Data: []DatasetItem{
+		json.NewEncoder(w).Encode(langfuse.DatasetItemsListResponse{
+			Data: []langfuse.DatasetItem{
 				{ID: "item-1"},
 				{ID: "item-2"},
 			},
-			Meta: MetaResponse{TotalItems: 2},
+			Meta: langfuse.MetaResponse{TotalItems: 2},
 		})
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key", langfuse.WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
-	result, err := client.Datasets().ListItems(context.Background(), &DatasetItemsListParams{
+	result, err := client.Datasets().ListItems(context.Background(), &langfuse.DatasetItemsListParams{
 		DatasetName: "my-dataset",
 	})
 	if err != nil {
@@ -170,7 +172,7 @@ func TestDatasetsClientGetItem(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(DatasetItem{
+		json.NewEncoder(w).Encode(langfuse.DatasetItem{
 			ID:             "item-123",
 			DatasetName:    "my-dataset",
 			Input:          map[string]string{"question": "What is 2+2?"},
@@ -179,7 +181,7 @@ func TestDatasetsClientGetItem(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key", langfuse.WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	item, err := client.Datasets().GetItem(context.Background(), "item-123")
@@ -198,7 +200,7 @@ func TestDatasetsClientCreateItem(t *testing.T) {
 			t.Errorf("Expected POST, got %s", r.Method)
 		}
 
-		var req CreateDatasetItemRequest
+		var req langfuse.CreateDatasetItemRequest
 		json.NewDecoder(r.Body).Decode(&req)
 
 		if req.DatasetName != "my-dataset" {
@@ -206,7 +208,7 @@ func TestDatasetsClientCreateItem(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(DatasetItem{
+		json.NewEncoder(w).Encode(langfuse.DatasetItem{
 			ID:             "item-new",
 			DatasetName:    req.DatasetName,
 			Input:          req.Input,
@@ -215,10 +217,10 @@ func TestDatasetsClientCreateItem(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key", langfuse.WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
-	item, err := client.Datasets().CreateItem(context.Background(), &CreateDatasetItemRequest{
+	item, err := client.Datasets().CreateItem(context.Background(), &langfuse.CreateDatasetItemRequest{
 		DatasetName:    "my-dataset",
 		Input:          map[string]string{"question": "What is 3+3?"},
 		ExpectedOutput: map[string]string{"answer": "6"},
@@ -233,17 +235,17 @@ func TestDatasetsClientCreateItem(t *testing.T) {
 }
 
 func TestDatasetsClientCreateItemValidation(t *testing.T) {
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key")
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key")
 	defer client.Shutdown(context.Background())
 
 	// Nil request
 	_, err := client.Datasets().CreateItem(context.Background(), nil)
-	if err != ErrNilRequest {
+	if err != langfuse.ErrNilRequest {
 		t.Errorf("Expected ErrNilRequest, got %v", err)
 	}
 
 	// Missing datasetName
-	_, err = client.Datasets().CreateItem(context.Background(), &CreateDatasetItemRequest{
+	_, err = client.Datasets().CreateItem(context.Background(), &langfuse.CreateDatasetItemRequest{
 		Input: map[string]string{"q": "test"},
 	})
 	if err == nil {
@@ -264,7 +266,7 @@ func TestDatasetsClientDeleteItem(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key", langfuse.WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	err := client.Datasets().DeleteItem(context.Background(), "item-123")
@@ -280,17 +282,17 @@ func TestDatasetsClientListRuns(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(DatasetRunsListResponse{
-			Data: []DatasetRun{
+		json.NewEncoder(w).Encode(langfuse.DatasetRunsListResponse{
+			Data: []langfuse.DatasetRun{
 				{ID: "run-1", Name: "Run 1"},
 				{ID: "run-2", Name: "Run 2"},
 			},
-			Meta: MetaResponse{TotalItems: 2},
+			Meta: langfuse.MetaResponse{TotalItems: 2},
 		})
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key", langfuse.WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	result, err := client.Datasets().ListRuns(context.Background(), "my-dataset", nil)
@@ -310,7 +312,7 @@ func TestDatasetsClientGetRun(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(DatasetRun{
+		json.NewEncoder(w).Encode(langfuse.DatasetRun{
 			ID:          "run-123",
 			Name:        "my-run",
 			DatasetName: "my-dataset",
@@ -318,7 +320,7 @@ func TestDatasetsClientGetRun(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key", langfuse.WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	run, err := client.Datasets().GetRun(context.Background(), "my-dataset", "my-run")
@@ -344,7 +346,7 @@ func TestDatasetsClientDeleteRun(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key", langfuse.WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	err := client.Datasets().DeleteRun(context.Background(), "my-dataset", "my-run")
@@ -359,7 +361,7 @@ func TestDatasetsClientCreateRunItem(t *testing.T) {
 			t.Errorf("Expected POST, got %s", r.Method)
 		}
 
-		var req CreateDatasetRunItemRequest
+		var req langfuse.CreateDatasetRunItemRequest
 		json.NewDecoder(r.Body).Decode(&req)
 
 		if req.DatasetItemID != "item-123" {
@@ -370,7 +372,7 @@ func TestDatasetsClientCreateRunItem(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(DatasetRunItem{
+		json.NewEncoder(w).Encode(langfuse.DatasetRunItem{
 			ID:             "run-item-new",
 			DatasetItemID:  req.DatasetItemID,
 			DatasetRunName: req.RunName,
@@ -379,10 +381,10 @@ func TestDatasetsClientCreateRunItem(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key", langfuse.WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
-	runItem, err := client.Datasets().CreateRunItem(context.Background(), &CreateDatasetRunItemRequest{
+	runItem, err := client.Datasets().CreateRunItem(context.Background(), &langfuse.CreateDatasetRunItemRequest{
 		DatasetItemID: "item-123",
 		RunName:       "my-run",
 		TraceID:       "trace-456",
@@ -397,17 +399,17 @@ func TestDatasetsClientCreateRunItem(t *testing.T) {
 }
 
 func TestDatasetsClientCreateRunItemValidation(t *testing.T) {
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key")
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key")
 	defer client.Shutdown(context.Background())
 
 	// Nil request
 	_, err := client.Datasets().CreateRunItem(context.Background(), nil)
-	if err != ErrNilRequest {
+	if err != langfuse.ErrNilRequest {
 		t.Errorf("Expected ErrNilRequest, got %v", err)
 	}
 
 	// Missing datasetItemId
-	_, err = client.Datasets().CreateRunItem(context.Background(), &CreateDatasetRunItemRequest{
+	_, err = client.Datasets().CreateRunItem(context.Background(), &langfuse.CreateDatasetRunItemRequest{
 		RunName: "my-run",
 	})
 	if err == nil {
@@ -415,7 +417,7 @@ func TestDatasetsClientCreateRunItemValidation(t *testing.T) {
 	}
 
 	// Missing runName
-	_, err = client.Datasets().CreateRunItem(context.Background(), &CreateDatasetRunItemRequest{
+	_, err = client.Datasets().CreateRunItem(context.Background(), &langfuse.CreateDatasetRunItemRequest{
 		DatasetItemID: "item-123",
 	})
 	if err == nil {

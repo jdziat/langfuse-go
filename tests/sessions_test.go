@@ -1,4 +1,4 @@
-package langfuse
+package langfuse_test
 
 import (
 	"context"
@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	langfuse "github.com/jdziat/langfuse-go"
 )
 
 func TestSessionsClientList(t *testing.T) {
@@ -18,17 +20,17 @@ func TestSessionsClientList(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(SessionsListResponse{
-			Data: []Session{
+		json.NewEncoder(w).Encode(langfuse.SessionsListResponse{
+			Data: []langfuse.Session{
 				{ID: "session-1"},
 				{ID: "session-2"},
 			},
-			Meta: MetaResponse{TotalItems: 2},
+			Meta: langfuse.MetaResponse{TotalItems: 2},
 		})
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key", langfuse.WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	result, err := client.Sessions().List(context.Background(), nil)
@@ -55,18 +57,18 @@ func TestSessionsClientListWithParams(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(SessionsListResponse{
-			Data: []Session{{ID: "session-1"}},
-			Meta: MetaResponse{TotalItems: 1},
+		json.NewEncoder(w).Encode(langfuse.SessionsListResponse{
+			Data: []langfuse.Session{{ID: "session-1"}},
+			Meta: langfuse.MetaResponse{TotalItems: 1},
 		})
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key", langfuse.WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
-	result, err := client.Sessions().List(context.Background(), &SessionsListParams{
-		PaginationParams: PaginationParams{Page: 1},
+	result, err := client.Sessions().List(context.Background(), &langfuse.SessionsListParams{
+		PaginationParams: langfuse.PaginationParams{Page: 1},
 		FromTimestamp:    "2024-01-01T00:00:00Z",
 		ToTimestamp:      "2024-12-31T23:59:59Z",
 	})
@@ -86,14 +88,14 @@ func TestSessionsClientGet(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(Session{
+		json.NewEncoder(w).Encode(langfuse.Session{
 			ID:        "session-123",
 			ProjectID: "project-456",
 		})
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key", langfuse.WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	session, err := client.Sessions().Get(context.Background(), "session-123")
@@ -113,7 +115,7 @@ func TestSessionsClientGetWithTraces(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 
 		if r.URL.Path == "/sessions/session-123" {
-			json.NewEncoder(w).Encode(Session{
+			json.NewEncoder(w).Encode(langfuse.Session{
 				ID: "session-123",
 			})
 			return
@@ -124,12 +126,12 @@ func TestSessionsClientGetWithTraces(t *testing.T) {
 			if query.Get("sessionId") != "session-123" {
 				t.Errorf("Expected sessionId=session-123, got %s", query.Get("sessionId"))
 			}
-			json.NewEncoder(w).Encode(TracesListResponse{
-				Data: []Trace{
+			json.NewEncoder(w).Encode(langfuse.TracesListResponse{
+				Data: []langfuse.Trace{
 					{ID: "trace-1", SessionID: "session-123"},
 					{ID: "trace-2", SessionID: "session-123"},
 				},
-				Meta: MetaResponse{TotalItems: 2},
+				Meta: langfuse.MetaResponse{TotalItems: 2},
 			})
 			return
 		}
@@ -138,7 +140,7 @@ func TestSessionsClientGetWithTraces(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key", langfuse.WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	result, err := client.Sessions().GetWithTraces(context.Background(), "session-123")
@@ -170,7 +172,7 @@ func TestSessionsClientGetNotFound(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client, _ := New("pk-lf-test-key", "sk-lf-test-key", WithBaseURL(server.URL))
+	client, _ := langfuse.New("pk-lf-test-key", "sk-lf-test-key", langfuse.WithBaseURL(server.URL))
 	defer client.Shutdown(context.Background())
 
 	_, err := client.Sessions().Get(context.Background(), "nonexistent")
@@ -178,7 +180,7 @@ func TestSessionsClientGetNotFound(t *testing.T) {
 		t.Fatal("Expected error, got nil")
 	}
 
-	apiErr, ok := err.(*APIError)
+	apiErr, ok := err.(*langfuse.APIError)
 	if !ok {
 		t.Fatalf("Expected APIError, got %T", err)
 	}

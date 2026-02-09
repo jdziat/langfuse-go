@@ -1,20 +1,57 @@
-package langfuse
+package langfuse_test
 
 import (
 	"sync"
 	"testing"
+	"time"
+
+	langfuse "github.com/jdziat/langfuse-go"
 )
+
+// testMetrics is a mock metrics implementation for testing
+type testMetrics struct {
+	mu       sync.Mutex
+	counters map[string]int64
+	gauges   map[string]float64
+}
+
+func newTestMetrics() *testMetrics {
+	return &testMetrics{
+		counters: make(map[string]int64),
+		gauges:   make(map[string]float64),
+	}
+}
+
+func (m *testMetrics) IncrementCounter(name string, value int64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.counters == nil {
+		m.counters = make(map[string]int64)
+	}
+	m.counters[name] += value
+}
+
+func (m *testMetrics) RecordDuration(name string, duration time.Duration) {}
+
+func (m *testMetrics) SetGauge(name string, value float64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.gauges == nil {
+		m.gauges = make(map[string]float64)
+	}
+	m.gauges[name] = value
+}
 
 func TestBackpressureLevel_String(t *testing.T) {
 	tests := []struct {
-		level BackpressureLevel
+		level langfuse.BackpressureLevel
 		want  string
 	}{
-		{BackpressureNone, "none"},
-		{BackpressureWarning, "warning"},
-		{BackpressureCritical, "critical"},
-		{BackpressureOverflow, "overflow"},
-		{BackpressureLevel(99), "unknown"},
+		{langfuse.BackpressureNone, "none"},
+		{langfuse.BackpressureWarning, "warning"},
+		{langfuse.BackpressureCritical, "critical"},
+		{langfuse.BackpressureOverflow, "overflow"},
+		{langfuse.BackpressureLevel(99), "unknown"},
 	}
 
 	for _, tt := range tests {
@@ -27,7 +64,7 @@ func TestBackpressureLevel_String(t *testing.T) {
 }
 
 func TestDefaultBackpressureThreshold(t *testing.T) {
-	threshold := DefaultBackpressureThreshold()
+	threshold := langfuse.DefaultBackpressureThreshold()
 
 	if threshold.WarningPercent != 50.0 {
 		t.Errorf("WarningPercent = %v, want 50.0", threshold.WarningPercent)
@@ -41,10 +78,10 @@ func TestDefaultBackpressureThreshold(t *testing.T) {
 }
 
 func TestQueueMonitor_Creation(t *testing.T) {
-	m := NewQueueMonitor(nil)
+	m := langfuse.NewQueueMonitor(nil)
 
-	if m.Level() != BackpressureNone {
-		t.Errorf("Level() = %v, want %v", m.Level(), BackpressureNone)
+	if m.Level() != langfuse.BackpressureNone {
+		t.Errorf("Level() = %v, want %v", m.Level(), langfuse.BackpressureNone)
 	}
 
 	if !m.IsHealthy() {
@@ -58,9 +95,9 @@ func TestQueueMonitor_Creation(t *testing.T) {
 }
 
 func TestQueueMonitor_CustomConfig(t *testing.T) {
-	m := NewQueueMonitor(&QueueMonitorConfig{
+	m := langfuse.NewQueueMonitor(&langfuse.QueueMonitorConfig{
 		Capacity: 500,
-		Threshold: BackpressureThreshold{
+		Threshold: langfuse.BackpressureThreshold{
 			WarningPercent:  40.0,
 			CriticalPercent: 70.0,
 			OverflowPercent: 90.0,
@@ -74,14 +111,14 @@ func TestQueueMonitor_CustomConfig(t *testing.T) {
 }
 
 func TestQueueMonitor_Update_None(t *testing.T) {
-	m := NewQueueMonitor(&QueueMonitorConfig{
+	m := langfuse.NewQueueMonitor(&langfuse.QueueMonitorConfig{
 		Capacity: 100,
 	})
 
 	level := m.Update(10) // 10%
 
-	if level != BackpressureNone {
-		t.Errorf("Update(10) = %v, want %v", level, BackpressureNone)
+	if level != langfuse.BackpressureNone {
+		t.Errorf("Update(10) = %v, want %v", level, langfuse.BackpressureNone)
 	}
 	if !m.IsHealthy() {
 		t.Error("IsHealthy() = false at 10%")
@@ -89,14 +126,14 @@ func TestQueueMonitor_Update_None(t *testing.T) {
 }
 
 func TestQueueMonitor_Update_Warning(t *testing.T) {
-	m := NewQueueMonitor(&QueueMonitorConfig{
+	m := langfuse.NewQueueMonitor(&langfuse.QueueMonitorConfig{
 		Capacity: 100,
 	})
 
 	level := m.Update(55) // 55%
 
-	if level != BackpressureWarning {
-		t.Errorf("Update(55) = %v, want %v", level, BackpressureWarning)
+	if level != langfuse.BackpressureWarning {
+		t.Errorf("Update(55) = %v, want %v", level, langfuse.BackpressureWarning)
 	}
 	if m.IsHealthy() {
 		t.Error("IsHealthy() = true at 55%, want false")
@@ -107,14 +144,14 @@ func TestQueueMonitor_Update_Warning(t *testing.T) {
 }
 
 func TestQueueMonitor_Update_Critical(t *testing.T) {
-	m := NewQueueMonitor(&QueueMonitorConfig{
+	m := langfuse.NewQueueMonitor(&langfuse.QueueMonitorConfig{
 		Capacity: 100,
 	})
 
 	level := m.Update(85) // 85%
 
-	if level != BackpressureCritical {
-		t.Errorf("Update(85) = %v, want %v", level, BackpressureCritical)
+	if level != langfuse.BackpressureCritical {
+		t.Errorf("Update(85) = %v, want %v", level, langfuse.BackpressureCritical)
 	}
 	if m.IsHealthy() {
 		t.Error("IsHealthy() = true at 85%, want false")
@@ -128,14 +165,14 @@ func TestQueueMonitor_Update_Critical(t *testing.T) {
 }
 
 func TestQueueMonitor_Update_Overflow(t *testing.T) {
-	m := NewQueueMonitor(&QueueMonitorConfig{
+	m := langfuse.NewQueueMonitor(&langfuse.QueueMonitorConfig{
 		Capacity: 100,
 	})
 
 	level := m.Update(98) // 98%
 
-	if level != BackpressureOverflow {
-		t.Errorf("Update(98) = %v, want %v", level, BackpressureOverflow)
+	if level != langfuse.BackpressureOverflow {
+		t.Errorf("Update(98) = %v, want %v", level, langfuse.BackpressureOverflow)
 	}
 	if !m.ShouldBlock() {
 		t.Error("ShouldBlock() = false at 98%, want true")
@@ -143,12 +180,12 @@ func TestQueueMonitor_Update_Overflow(t *testing.T) {
 }
 
 func TestQueueMonitor_Callback(t *testing.T) {
-	var receivedState QueueState
+	var receivedState langfuse.QueueState
 	var mu sync.Mutex
 
-	m := NewQueueMonitor(&QueueMonitorConfig{
+	m := langfuse.NewQueueMonitor(&langfuse.QueueMonitorConfig{
 		Capacity: 100,
-		OnBackpressure: func(state QueueState) {
+		OnBackpressure: func(state langfuse.QueueState) {
 			mu.Lock()
 			receivedState = state
 			mu.Unlock()
@@ -161,8 +198,8 @@ func TestQueueMonitor_Callback(t *testing.T) {
 	got := receivedState
 	mu.Unlock()
 
-	if got.Level != BackpressureWarning {
-		t.Errorf("callback received level %v, want %v", got.Level, BackpressureWarning)
+	if got.Level != langfuse.BackpressureWarning {
+		t.Errorf("callback received level %v, want %v", got.Level, langfuse.BackpressureWarning)
 	}
 }
 
@@ -170,9 +207,9 @@ func TestQueueMonitor_CallbackOnlyOnChange(t *testing.T) {
 	var callCount int
 	var mu sync.Mutex
 
-	m := NewQueueMonitor(&QueueMonitorConfig{
+	m := langfuse.NewQueueMonitor(&langfuse.QueueMonitorConfig{
 		Capacity: 100,
-		OnBackpressure: func(state QueueState) {
+		OnBackpressure: func(state langfuse.QueueState) {
 			mu.Lock()
 			callCount++
 			mu.Unlock()
@@ -194,12 +231,12 @@ func TestQueueMonitor_CallbackOnlyOnChange(t *testing.T) {
 }
 
 func TestQueueMonitor_SetCallback(t *testing.T) {
-	m := NewQueueMonitor(&QueueMonitorConfig{
+	m := langfuse.NewQueueMonitor(&langfuse.QueueMonitorConfig{
 		Capacity: 100,
 	})
 
 	var called bool
-	m.SetCallback(func(state QueueState) {
+	m.SetCallback(func(state langfuse.QueueState) {
 		called = true
 	})
 
@@ -211,7 +248,7 @@ func TestQueueMonitor_SetCallback(t *testing.T) {
 }
 
 func TestQueueMonitor_Stats(t *testing.T) {
-	m := NewQueueMonitor(&QueueMonitorConfig{
+	m := langfuse.NewQueueMonitor(&langfuse.QueueMonitorConfig{
 		Capacity: 100,
 	})
 
@@ -237,7 +274,7 @@ func TestQueueMonitor_Stats(t *testing.T) {
 }
 
 func TestQueueMonitor_State(t *testing.T) {
-	m := NewQueueMonitor(&QueueMonitorConfig{
+	m := langfuse.NewQueueMonitor(&langfuse.QueueMonitorConfig{
 		Capacity: 100,
 	})
 
@@ -250,8 +287,8 @@ func TestQueueMonitor_State(t *testing.T) {
 	if state.Capacity != 100 {
 		t.Errorf("State().Capacity = %d, want 100", state.Capacity)
 	}
-	if state.Level != BackpressureWarning {
-		t.Errorf("State().Level = %v, want %v", state.Level, BackpressureWarning)
+	if state.Level != langfuse.BackpressureWarning {
+		t.Errorf("State().Level = %v, want %v", state.Level, langfuse.BackpressureWarning)
 	}
 	if state.PercentFull < 54.9 || state.PercentFull > 55.1 {
 		t.Errorf("State().PercentFull = %v, want ~55.0", state.PercentFull)
@@ -262,7 +299,7 @@ func TestQueueMonitor_State(t *testing.T) {
 }
 
 func TestQueueMonitor_ConcurrentAccess(t *testing.T) {
-	m := NewQueueMonitor(&QueueMonitorConfig{
+	m := langfuse.NewQueueMonitor(&langfuse.QueueMonitorConfig{
 		Capacity: 100,
 	})
 
@@ -270,11 +307,11 @@ func TestQueueMonitor_ConcurrentAccess(t *testing.T) {
 	const goroutines = 10
 	const iterations = 100
 
-	for i := 0; i < goroutines; i++ {
+	for i := range goroutines {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
-			for j := 0; j < iterations; j++ {
+			for j := range iterations {
 				size := (id*iterations + j) % 100
 				m.Update(size)
 				_ = m.Level()
@@ -290,8 +327,8 @@ func TestQueueMonitor_ConcurrentAccess(t *testing.T) {
 }
 
 func TestQueueMonitor_WithMetrics(t *testing.T) {
-	metrics := &testMetrics{}
-	m := NewQueueMonitor(&QueueMonitorConfig{
+	metrics := newTestMetrics()
+	m := langfuse.NewQueueMonitor(&langfuse.QueueMonitorConfig{
 		Capacity: 100,
 		Metrics:  metrics,
 	})
@@ -319,7 +356,7 @@ func TestQueueMonitor_WithLogger(t *testing.T) {
 		},
 	}
 
-	m := NewQueueMonitor(&QueueMonitorConfig{
+	m := langfuse.NewQueueMonitor(&langfuse.QueueMonitorConfig{
 		Capacity: 100,
 		Logger:   logger,
 	})
@@ -338,7 +375,7 @@ func TestQueueMonitor_WithLogger(t *testing.T) {
 // BackpressureHandler tests
 
 func TestBackpressureHandler_Creation(t *testing.T) {
-	h := NewBackpressureHandler(nil)
+	h := langfuse.NewBackpressureHandler(nil)
 
 	if h.Monitor() == nil {
 		t.Error("Monitor() returned nil")
@@ -346,22 +383,22 @@ func TestBackpressureHandler_Creation(t *testing.T) {
 }
 
 func TestBackpressureHandler_Decide_Allow(t *testing.T) {
-	h := NewBackpressureHandler(&BackpressureHandlerConfig{
-		Monitor: NewQueueMonitor(&QueueMonitorConfig{
+	h := langfuse.NewBackpressureHandler(&langfuse.BackpressureHandlerConfig{
+		Monitor: langfuse.NewQueueMonitor(&langfuse.QueueMonitorConfig{
 			Capacity: 100,
 		}),
 	})
 
 	decision := h.Decide(10)
 
-	if decision != DecisionAllow {
-		t.Errorf("Decide(10) = %v, want %v", decision, DecisionAllow)
+	if decision != langfuse.DecisionAllow {
+		t.Errorf("Decide(10) = %v, want %v", decision, langfuse.DecisionAllow)
 	}
 }
 
 func TestBackpressureHandler_Decide_Block(t *testing.T) {
-	h := NewBackpressureHandler(&BackpressureHandlerConfig{
-		Monitor: NewQueueMonitor(&QueueMonitorConfig{
+	h := langfuse.NewBackpressureHandler(&langfuse.BackpressureHandlerConfig{
+		Monitor: langfuse.NewQueueMonitor(&langfuse.QueueMonitorConfig{
 			Capacity: 100,
 		}),
 		BlockOnFull: true,
@@ -369,8 +406,8 @@ func TestBackpressureHandler_Decide_Block(t *testing.T) {
 
 	decision := h.Decide(98) // Overflow
 
-	if decision != DecisionBlock {
-		t.Errorf("Decide(98) with BlockOnFull = %v, want %v", decision, DecisionBlock)
+	if decision != langfuse.DecisionBlock {
+		t.Errorf("Decide(98) with BlockOnFull = %v, want %v", decision, langfuse.DecisionBlock)
 	}
 
 	stats := h.Stats()
@@ -380,8 +417,8 @@ func TestBackpressureHandler_Decide_Block(t *testing.T) {
 }
 
 func TestBackpressureHandler_Decide_Drop(t *testing.T) {
-	h := NewBackpressureHandler(&BackpressureHandlerConfig{
-		Monitor: NewQueueMonitor(&QueueMonitorConfig{
+	h := langfuse.NewBackpressureHandler(&langfuse.BackpressureHandlerConfig{
+		Monitor: langfuse.NewQueueMonitor(&langfuse.QueueMonitorConfig{
 			Capacity: 100,
 		}),
 		DropOnFull: true,
@@ -389,8 +426,8 @@ func TestBackpressureHandler_Decide_Drop(t *testing.T) {
 
 	decision := h.Decide(98) // Overflow
 
-	if decision != DecisionDrop {
-		t.Errorf("Decide(98) with DropOnFull = %v, want %v", decision, DecisionDrop)
+	if decision != langfuse.DecisionDrop {
+		t.Errorf("Decide(98) with DropOnFull = %v, want %v", decision, langfuse.DecisionDrop)
 	}
 
 	stats := h.Stats()
@@ -400,8 +437,8 @@ func TestBackpressureHandler_Decide_Drop(t *testing.T) {
 }
 
 func TestBackpressureHandler_Stats(t *testing.T) {
-	h := NewBackpressureHandler(&BackpressureHandlerConfig{
-		Monitor: NewQueueMonitor(&QueueMonitorConfig{
+	h := langfuse.NewBackpressureHandler(&langfuse.BackpressureHandlerConfig{
+		Monitor: langfuse.NewQueueMonitor(&langfuse.QueueMonitorConfig{
 			Capacity: 100,
 		}),
 		BlockOnFull: true,
@@ -420,13 +457,13 @@ func TestBackpressureHandler_Stats(t *testing.T) {
 
 func TestBackpressureDecision_String(t *testing.T) {
 	tests := []struct {
-		decision BackpressureDecision
+		decision langfuse.BackpressureDecision
 		want     string
 	}{
-		{DecisionAllow, "allow"},
-		{DecisionBlock, "block"},
-		{DecisionDrop, "drop"},
-		{BackpressureDecision(99), "unknown"},
+		{langfuse.DecisionAllow, "allow"},
+		{langfuse.DecisionBlock, "block"},
+		{langfuse.DecisionDrop, "drop"},
+		{langfuse.BackpressureDecision(99), "unknown"},
 	}
 
 	for _, tt := range tests {
@@ -439,9 +476,9 @@ func TestBackpressureDecision_String(t *testing.T) {
 }
 
 func TestBackpressureHandler_WithMetrics(t *testing.T) {
-	metrics := &testMetrics{}
-	h := NewBackpressureHandler(&BackpressureHandlerConfig{
-		Monitor: NewQueueMonitor(&QueueMonitorConfig{
+	metrics := newTestMetrics()
+	h := langfuse.NewBackpressureHandler(&langfuse.BackpressureHandlerConfig{
+		Monitor: langfuse.NewQueueMonitor(&langfuse.QueueMonitorConfig{
 			Capacity: 100,
 		}),
 		BlockOnFull: true,
@@ -467,8 +504,8 @@ func TestBackpressureHandler_WithLogger(t *testing.T) {
 		},
 	}
 
-	h := NewBackpressureHandler(&BackpressureHandlerConfig{
-		Monitor: NewQueueMonitor(&QueueMonitorConfig{
+	h := langfuse.NewBackpressureHandler(&langfuse.BackpressureHandlerConfig{
+		Monitor: langfuse.NewQueueMonitor(&langfuse.QueueMonitorConfig{
 			Capacity: 100,
 		}),
 		DropOnFull: true,
@@ -498,7 +535,7 @@ func (l *bpTestLogger) Printf(format string, args ...any) {
 }
 
 func BenchmarkQueueMonitor_Update(b *testing.B) {
-	m := NewQueueMonitor(&QueueMonitorConfig{
+	m := langfuse.NewQueueMonitor(&langfuse.QueueMonitorConfig{
 		Capacity: 1000,
 	})
 
@@ -509,7 +546,7 @@ func BenchmarkQueueMonitor_Update(b *testing.B) {
 }
 
 func BenchmarkQueueMonitor_UpdateConcurrent(b *testing.B) {
-	m := NewQueueMonitor(&QueueMonitorConfig{
+	m := langfuse.NewQueueMonitor(&langfuse.QueueMonitorConfig{
 		Capacity: 1000,
 	})
 
@@ -524,8 +561,8 @@ func BenchmarkQueueMonitor_UpdateConcurrent(b *testing.B) {
 }
 
 func BenchmarkBackpressureHandler_Decide(b *testing.B) {
-	h := NewBackpressureHandler(&BackpressureHandlerConfig{
-		Monitor: NewQueueMonitor(&QueueMonitorConfig{
+	h := langfuse.NewBackpressureHandler(&langfuse.BackpressureHandlerConfig{
+		Monitor: langfuse.NewQueueMonitor(&langfuse.QueueMonitorConfig{
 			Capacity: 1000,
 		}),
 	})
@@ -539,7 +576,7 @@ func BenchmarkBackpressureHandler_Decide(b *testing.B) {
 // Edge cases
 
 func TestQueueMonitor_ZeroCapacity(t *testing.T) {
-	m := NewQueueMonitor(&QueueMonitorConfig{
+	m := langfuse.NewQueueMonitor(&langfuse.QueueMonitorConfig{
 		Capacity: 0, // Should use default
 	})
 
@@ -550,9 +587,9 @@ func TestQueueMonitor_ZeroCapacity(t *testing.T) {
 }
 
 func TestQueueMonitor_NegativeThresholds(t *testing.T) {
-	m := NewQueueMonitor(&QueueMonitorConfig{
+	m := langfuse.NewQueueMonitor(&langfuse.QueueMonitorConfig{
 		Capacity: 100,
-		Threshold: BackpressureThreshold{
+		Threshold: langfuse.BackpressureThreshold{
 			WarningPercent:  -10, // Should use default
 			CriticalPercent: -20,
 			OverflowPercent: -30,
@@ -561,15 +598,15 @@ func TestQueueMonitor_NegativeThresholds(t *testing.T) {
 
 	// Should use defaults
 	m.Update(55) // 55% should be warning with default 50%
-	if m.Level() != BackpressureWarning {
-		t.Errorf("Level() = %v at 55%% with default threshold, want %v", m.Level(), BackpressureWarning)
+	if m.Level() != langfuse.BackpressureWarning {
+		t.Errorf("Level() = %v at 55%% with default threshold, want %v", m.Level(), langfuse.BackpressureWarning)
 	}
 }
 
 func TestQueueMonitor_ExactThresholdBoundaries(t *testing.T) {
-	m := NewQueueMonitor(&QueueMonitorConfig{
+	m := langfuse.NewQueueMonitor(&langfuse.QueueMonitorConfig{
 		Capacity: 100,
-		Threshold: BackpressureThreshold{
+		Threshold: langfuse.BackpressureThreshold{
 			WarningPercent:  50.0,
 			CriticalPercent: 80.0,
 			OverflowPercent: 95.0,
@@ -578,24 +615,24 @@ func TestQueueMonitor_ExactThresholdBoundaries(t *testing.T) {
 
 	// Exactly at warning threshold
 	level := m.Update(50)
-	if level != BackpressureWarning {
-		t.Errorf("Update(50) at exact warning threshold = %v, want %v", level, BackpressureWarning)
+	if level != langfuse.BackpressureWarning {
+		t.Errorf("Update(50) at exact warning threshold = %v, want %v", level, langfuse.BackpressureWarning)
 	}
 
 	// Just below warning threshold
 	level = m.Update(49)
-	if level != BackpressureNone {
-		t.Errorf("Update(49) below warning threshold = %v, want %v", level, BackpressureNone)
+	if level != langfuse.BackpressureNone {
+		t.Errorf("Update(49) below warning threshold = %v, want %v", level, langfuse.BackpressureNone)
 	}
 }
 
 func TestQueueMonitor_RecoveringFromOverflow(t *testing.T) {
-	var levels []BackpressureLevel
+	var levels []langfuse.BackpressureLevel
 	var mu sync.Mutex
 
-	m := NewQueueMonitor(&QueueMonitorConfig{
+	m := langfuse.NewQueueMonitor(&langfuse.QueueMonitorConfig{
 		Capacity: 100,
-		OnBackpressure: func(state QueueState) {
+		OnBackpressure: func(state langfuse.QueueState) {
 			mu.Lock()
 			levels = append(levels, state.Level)
 			mu.Unlock()
@@ -618,11 +655,11 @@ func TestQueueMonitor_RecoveringFromOverflow(t *testing.T) {
 		t.Errorf("len(levels) = %d, want 4", len(levels))
 	}
 
-	expected := []BackpressureLevel{
-		BackpressureOverflow,
-		BackpressureCritical,
-		BackpressureWarning,
-		BackpressureNone,
+	expected := []langfuse.BackpressureLevel{
+		langfuse.BackpressureOverflow,
+		langfuse.BackpressureCritical,
+		langfuse.BackpressureWarning,
+		langfuse.BackpressureNone,
 	}
 
 	for i, want := range expected {

@@ -1,4 +1,4 @@
-package langfuse
+package langfuse_test
 
 import (
 	"errors"
@@ -6,17 +6,21 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	langfuse "github.com/jdziat/langfuse-go"
 )
+
+// testMetrics is defined in backpressure_test.go
 
 func TestAPIErrorError(t *testing.T) {
 	tests := []struct {
 		name     string
-		err      APIError
+		err      langfuse.APIError
 		expected string
 	}{
 		{
 			name: "with message",
-			err: APIError{
+			err: langfuse.APIError{
 				StatusCode: 400,
 				Message:    "Bad Request",
 			},
@@ -24,7 +28,7 @@ func TestAPIErrorError(t *testing.T) {
 		},
 		{
 			name: "with error message",
-			err: APIError{
+			err: langfuse.APIError{
 				StatusCode:   500,
 				ErrorMessage: "Internal Server Error",
 			},
@@ -32,7 +36,7 @@ func TestAPIErrorError(t *testing.T) {
 		},
 		{
 			name: "message takes precedence",
-			err: APIError{
+			err: langfuse.APIError{
 				StatusCode:   400,
 				Message:      "Bad Request",
 				ErrorMessage: "Error Detail",
@@ -41,7 +45,7 @@ func TestAPIErrorError(t *testing.T) {
 		},
 		{
 			name: "status code only",
-			err: APIError{
+			err: langfuse.APIError{
 				StatusCode: 404,
 			},
 			expected: "langfuse: API error (status 404)",
@@ -125,7 +129,7 @@ func TestAPIErrorStatusChecks(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := &APIError{StatusCode: tt.statusCode}
+			err := &langfuse.APIError{StatusCode: tt.statusCode}
 
 			if got := err.IsNotFound(); got != tt.isNotFound {
 				t.Errorf("IsNotFound() = %v, want %v", got, tt.isNotFound)
@@ -152,18 +156,18 @@ func TestAPIErrorStatusChecks(t *testing.T) {
 func TestIngestionResultHasErrors(t *testing.T) {
 	tests := []struct {
 		name     string
-		result   IngestionResult
+		result   langfuse.IngestionResult
 		hasError bool
 	}{
 		{
 			name:     "empty result",
-			result:   IngestionResult{},
+			result:   langfuse.IngestionResult{},
 			hasError: false,
 		},
 		{
 			name: "successes only",
-			result: IngestionResult{
-				Successes: []IngestionSuccess{
+			result: langfuse.IngestionResult{
+				Successes: []langfuse.IngestionSuccess{
 					{ID: "1", Status: 200},
 					{ID: "2", Status: 200},
 				},
@@ -172,11 +176,11 @@ func TestIngestionResultHasErrors(t *testing.T) {
 		},
 		{
 			name: "with errors",
-			result: IngestionResult{
-				Successes: []IngestionSuccess{
+			result: langfuse.IngestionResult{
+				Successes: []langfuse.IngestionSuccess{
 					{ID: "1", Status: 200},
 				},
-				Errors: []IngestionError{
+				Errors: []langfuse.IngestionError{
 					{ID: "2", Status: 400, Message: "Invalid"},
 				},
 			},
@@ -184,8 +188,8 @@ func TestIngestionResultHasErrors(t *testing.T) {
 		},
 		{
 			name: "errors only",
-			result: IngestionResult{
-				Errors: []IngestionError{
+			result: langfuse.IngestionResult{
+				Errors: []langfuse.IngestionError{
 					{ID: "1", Status: 400, Message: "Invalid"},
 				},
 			},
@@ -203,7 +207,7 @@ func TestIngestionResultHasErrors(t *testing.T) {
 }
 
 func TestValidationError(t *testing.T) {
-	err := NewValidationError("name", "field is required")
+	err := langfuse.NewValidationError("name", "field is required")
 
 	if err.Field != "name" {
 		t.Errorf("Field = %v, want %v", err.Field, "name")
@@ -226,27 +230,27 @@ func TestSentinelErrors(t *testing.T) {
 	}{
 		{
 			name:     "ErrMissingPublicKey",
-			err:      ErrMissingPublicKey,
+			err:      langfuse.ErrMissingPublicKey,
 			contains: "public key",
 		},
 		{
 			name:     "ErrMissingSecretKey",
-			err:      ErrMissingSecretKey,
+			err:      langfuse.ErrMissingSecretKey,
 			contains: "secret key",
 		},
 		{
 			name:     "ErrMissingBaseURL",
-			err:      ErrMissingBaseURL,
+			err:      langfuse.ErrMissingBaseURL,
 			contains: "base URL",
 		},
 		{
 			name:     "ErrClientClosed",
-			err:      ErrClientClosed,
+			err:      langfuse.ErrClientClosed,
 			contains: "closed",
 		},
 		{
 			name:     "ErrNilRequest",
-			err:      ErrNilRequest,
+			err:      langfuse.ErrNilRequest,
 			contains: "nil",
 		},
 	}
@@ -257,35 +261,25 @@ func TestSentinelErrors(t *testing.T) {
 				t.Error("Error should not be nil")
 			}
 			errStr := tt.err.Error()
-			if !containsSubstring(errStr, tt.contains) {
+			if !strings.Contains(errStr, tt.contains) {
 				t.Errorf("Error() = %v, should contain %v", errStr, tt.contains)
 			}
 		})
 	}
 }
 
-// containsSubstring checks if s contains substr
-func containsSubstring(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
-}
-
 func TestCompilationError(t *testing.T) {
 	t.Run("single error", func(t *testing.T) {
-		err := &CompilationError{
+		err := &langfuse.CompilationError{
 			Errors: []error{
-				NewValidationError("role", "missing role"),
+				langfuse.NewValidationError("role", "missing role"),
 			},
 		}
 		errStr := err.Error()
-		if !containsSubstring(errStr, "prompt compilation failed") {
+		if !strings.Contains(errStr, "prompt compilation failed") {
 			t.Errorf("Error() = %v, should contain 'prompt compilation failed'", errStr)
 		}
-		if !containsSubstring(errStr, "missing role") {
+		if !strings.Contains(errStr, "missing role") {
 			t.Errorf("Error() = %v, should contain 'missing role'", errStr)
 		}
 
@@ -297,20 +291,20 @@ func TestCompilationError(t *testing.T) {
 	})
 
 	t.Run("multiple errors", func(t *testing.T) {
-		err := &CompilationError{
+		err := &langfuse.CompilationError{
 			Errors: []error{
-				NewValidationError("role", "missing role"),
-				NewValidationError("content", "missing content"),
+				langfuse.NewValidationError("role", "missing role"),
+				langfuse.NewValidationError("content", "missing content"),
 			},
 		}
 		errStr := err.Error()
-		if !containsSubstring(errStr, "2 errors") {
+		if !strings.Contains(errStr, "2 errors") {
 			t.Errorf("Error() = %v, should contain '2 errors'", errStr)
 		}
-		if !containsSubstring(errStr, "missing role") {
+		if !strings.Contains(errStr, "missing role") {
 			t.Errorf("Error() = %v, should contain 'missing role'", errStr)
 		}
-		if !containsSubstring(errStr, "missing content") {
+		if !strings.Contains(errStr, "missing content") {
 			t.Errorf("Error() = %v, should contain 'missing content'", errStr)
 		}
 
@@ -322,19 +316,19 @@ func TestCompilationError(t *testing.T) {
 	})
 
 	t.Run("empty errors", func(t *testing.T) {
-		err := &CompilationError{}
+		err := &langfuse.CompilationError{}
 		errStr := err.Error()
-		if !containsSubstring(errStr, "prompt compilation failed") {
+		if !strings.Contains(errStr, "prompt compilation failed") {
 			t.Errorf("Error() = %v, should contain 'prompt compilation failed'", errStr)
 		}
 	})
 
 	t.Run("IsCompilationError helper", func(t *testing.T) {
-		err := &CompilationError{
-			Errors: []error{NewValidationError("test", "test error")},
+		err := &langfuse.CompilationError{
+			Errors: []error{langfuse.NewValidationError("test", "test error")},
 		}
 
-		compErr, ok := IsCompilationError(err)
+		compErr, ok := langfuse.IsCompilationError(err)
 		if !ok {
 			t.Error("IsCompilationError() should return true for CompilationError")
 		}
@@ -343,7 +337,7 @@ func TestCompilationError(t *testing.T) {
 		}
 
 		// Test with non-CompilationError
-		_, ok = IsCompilationError(ErrClientClosed)
+		_, ok = langfuse.IsCompilationError(langfuse.ErrClientClosed)
 		if ok {
 			t.Error("IsCompilationError() should return false for non-CompilationError")
 		}
@@ -352,40 +346,40 @@ func TestCompilationError(t *testing.T) {
 
 func TestShutdownError(t *testing.T) {
 	t.Run("with pending events", func(t *testing.T) {
-		err := &ShutdownError{
-			Cause:         ErrClientClosed,
+		err := &langfuse.ShutdownError{
+			Cause:         langfuse.ErrClientClosed,
 			PendingEvents: 10,
 			Message:       "timeout",
 		}
 		errStr := err.Error()
-		if !containsSubstring(errStr, "10 pending events") {
+		if !strings.Contains(errStr, "10 pending events") {
 			t.Errorf("Error() = %v, should contain '10 pending events'", errStr)
 		}
 	})
 
 	t.Run("without pending events", func(t *testing.T) {
-		err := &ShutdownError{
-			Cause:   ErrClientClosed,
+		err := &langfuse.ShutdownError{
+			Cause:   langfuse.ErrClientClosed,
 			Message: "timeout",
 		}
 		errStr := err.Error()
-		if containsSubstring(errStr, "pending events") {
+		if strings.Contains(errStr, "pending events") {
 			t.Errorf("Error() = %v, should not contain 'pending events'", errStr)
 		}
 	})
 
 	t.Run("Unwrap", func(t *testing.T) {
-		cause := ErrClientClosed
-		err := &ShutdownError{Cause: cause}
+		cause := langfuse.ErrClientClosed
+		err := &langfuse.ShutdownError{Cause: cause}
 		if err.Unwrap() != cause {
 			t.Error("Unwrap() should return the cause")
 		}
 	})
 
 	t.Run("IsShutdownError helper", func(t *testing.T) {
-		err := &ShutdownError{Message: "test"}
+		err := &langfuse.ShutdownError{Message: "test"}
 
-		shutdownErr, ok := IsShutdownError(err)
+		shutdownErr, ok := langfuse.IsShutdownError(err)
 		if !ok {
 			t.Error("IsShutdownError() should return true for ShutdownError")
 		}
@@ -396,34 +390,34 @@ func TestShutdownError(t *testing.T) {
 }
 
 func TestAPIErrorWithRequestID(t *testing.T) {
-	err := &APIError{
+	err := &langfuse.APIError{
 		StatusCode: 500,
 		Message:    "Internal error",
 		RequestID:  "req-12345",
 	}
 	errStr := err.Error()
-	if !containsSubstring(errStr, "req-12345") {
+	if !strings.Contains(errStr, "req-12345") {
 		t.Errorf("Error() = %v, should contain request ID", errStr)
 	}
 }
 
 func TestAPIErrorIs(t *testing.T) {
-	err := &APIError{StatusCode: 404}
+	err := &langfuse.APIError{StatusCode: 404}
 
-	if err.Is(ErrNotFound) != true {
+	if err.Is(langfuse.ErrNotFound) != true {
 		t.Error("404 error should match ErrNotFound")
 	}
-	if err.Is(ErrUnauthorized) != false {
+	if err.Is(langfuse.ErrUnauthorized) != false {
 		t.Error("404 error should not match ErrUnauthorized")
 	}
-	if err.Is(ErrClientClosed) != false {
+	if err.Is(langfuse.ErrClientClosed) != false {
 		t.Error("APIError should not match non-APIError")
 	}
 }
 
 func TestAPIErrorWithError(t *testing.T) {
-	cause := ErrClientClosed
-	err := &APIError{StatusCode: 500}
+	cause := langfuse.ErrClientClosed
+	err := &langfuse.APIError{StatusCode: 500}
 	wrapped := err.WithError(cause)
 
 	if wrapped.Unwrap() != cause {
@@ -433,8 +427,8 @@ func TestAPIErrorWithError(t *testing.T) {
 
 func TestAsAPIError(t *testing.T) {
 	t.Run("with APIError", func(t *testing.T) {
-		err := &APIError{StatusCode: 404, Message: "Not found"}
-		apiErr, ok := AsAPIError(err)
+		err := &langfuse.APIError{StatusCode: 404, Message: "Not found"}
+		apiErr, ok := langfuse.AsAPIError(err)
 		if !ok {
 			t.Error("AsAPIError() should return true for APIError")
 		}
@@ -447,7 +441,7 @@ func TestAsAPIError(t *testing.T) {
 	})
 
 	t.Run("with non-APIError", func(t *testing.T) {
-		apiErr, ok := AsAPIError(ErrClientClosed)
+		apiErr, ok := langfuse.AsAPIError(langfuse.ErrClientClosed)
 		if ok {
 			t.Error("AsAPIError() should return false for non-APIError")
 		}
@@ -457,7 +451,7 @@ func TestAsAPIError(t *testing.T) {
 	})
 
 	t.Run("with nil error", func(t *testing.T) {
-		apiErr, ok := AsAPIError(nil)
+		apiErr, ok := langfuse.AsAPIError(nil)
 		if ok {
 			t.Error("AsAPIError() should return false for nil")
 		}
@@ -469,8 +463,8 @@ func TestAsAPIError(t *testing.T) {
 
 func TestAsValidationError(t *testing.T) {
 	t.Run("with ValidationError", func(t *testing.T) {
-		err := NewValidationError("field", "is required")
-		valErr, ok := AsValidationError(err)
+		err := langfuse.NewValidationError("field", "is required")
+		valErr, ok := langfuse.AsValidationError(err)
 		if !ok {
 			t.Error("AsValidationError() should return true for ValidationError")
 		}
@@ -483,7 +477,7 @@ func TestAsValidationError(t *testing.T) {
 	})
 
 	t.Run("with non-ValidationError", func(t *testing.T) {
-		valErr, ok := AsValidationError(ErrClientClosed)
+		valErr, ok := langfuse.AsValidationError(langfuse.ErrClientClosed)
 		if ok {
 			t.Error("AsValidationError() should return false for non-ValidationError")
 		}
@@ -495,8 +489,8 @@ func TestAsValidationError(t *testing.T) {
 
 func TestAsIngestionError(t *testing.T) {
 	t.Run("with IngestionError", func(t *testing.T) {
-		err := &IngestionError{ID: "event-1", Status: 400, Message: "Bad request"}
-		ingErr, ok := AsIngestionError(err)
+		err := &langfuse.IngestionError{ID: "event-1", Status: 400, Message: "Bad request"}
+		ingErr, ok := langfuse.AsIngestionError(err)
 		if !ok {
 			t.Error("AsIngestionError() should return true for IngestionError")
 		}
@@ -509,7 +503,7 @@ func TestAsIngestionError(t *testing.T) {
 	})
 
 	t.Run("with non-IngestionError", func(t *testing.T) {
-		ingErr, ok := AsIngestionError(ErrClientClosed)
+		ingErr, ok := langfuse.AsIngestionError(langfuse.ErrClientClosed)
 		if ok {
 			t.Error("AsIngestionError() should return false for non-IngestionError")
 		}
@@ -521,8 +515,8 @@ func TestAsIngestionError(t *testing.T) {
 
 func TestAsShutdownError(t *testing.T) {
 	t.Run("with ShutdownError", func(t *testing.T) {
-		err := &ShutdownError{PendingEvents: 10, Message: "timeout"}
-		shutdownErr, ok := AsShutdownError(err)
+		err := &langfuse.ShutdownError{PendingEvents: 10, Message: "timeout"}
+		shutdownErr, ok := langfuse.AsShutdownError(err)
 		if !ok {
 			t.Error("AsShutdownError() should return true for ShutdownError")
 		}
@@ -535,7 +529,7 @@ func TestAsShutdownError(t *testing.T) {
 	})
 
 	t.Run("with non-ShutdownError", func(t *testing.T) {
-		shutdownErr, ok := AsShutdownError(ErrClientClosed)
+		shutdownErr, ok := langfuse.AsShutdownError(langfuse.ErrClientClosed)
 		if ok {
 			t.Error("AsShutdownError() should return false for non-ShutdownError")
 		}
@@ -547,8 +541,8 @@ func TestAsShutdownError(t *testing.T) {
 
 func TestAsCompilationError(t *testing.T) {
 	t.Run("with CompilationError", func(t *testing.T) {
-		err := &CompilationError{Errors: []error{NewValidationError("test", "error")}}
-		compErr, ok := AsCompilationError(err)
+		err := &langfuse.CompilationError{Errors: []error{langfuse.NewValidationError("test", "error")}}
+		compErr, ok := langfuse.AsCompilationError(err)
 		if !ok {
 			t.Error("AsCompilationError() should return true for CompilationError")
 		}
@@ -561,7 +555,7 @@ func TestAsCompilationError(t *testing.T) {
 	})
 
 	t.Run("with non-CompilationError", func(t *testing.T) {
-		compErr, ok := AsCompilationError(ErrClientClosed)
+		compErr, ok := langfuse.AsCompilationError(langfuse.ErrClientClosed)
 		if ok {
 			t.Error("AsCompilationError() should return false for non-CompilationError")
 		}
@@ -573,24 +567,24 @@ func TestAsCompilationError(t *testing.T) {
 
 func TestErrorExtractionHelpers(t *testing.T) {
 	t.Run("AsAPIError extracts API error", func(t *testing.T) {
-		err := &APIError{StatusCode: 500}
-		apiErr, ok := AsAPIError(err)
+		err := &langfuse.APIError{StatusCode: 500}
+		apiErr, ok := langfuse.AsAPIError(err)
 		if !ok || apiErr == nil {
 			t.Error("AsAPIError should extract API error")
 		}
 	})
 
 	t.Run("AsValidationError extracts validation error", func(t *testing.T) {
-		err := NewValidationError("test", "error")
-		valErr, ok := AsValidationError(err)
+		err := langfuse.NewValidationError("test", "error")
+		valErr, ok := langfuse.AsValidationError(err)
 		if !ok || valErr == nil {
 			t.Error("AsValidationError should extract validation error")
 		}
 	})
 
 	t.Run("AsIngestionError extracts ingestion error", func(t *testing.T) {
-		err := &IngestionError{ID: "1", Status: 400}
-		ingErr, ok := AsIngestionError(err)
+		err := &langfuse.IngestionError{ID: "1", Status: 400}
+		ingErr, ok := langfuse.AsIngestionError(err)
 		if !ok || ingErr == nil {
 			t.Error("AsIngestionError should extract ingestion error")
 		}
@@ -601,7 +595,7 @@ func TestErrorCodeOf(t *testing.T) {
 	tests := []struct {
 		name     string
 		err      error
-		expected ErrorCode
+		expected langfuse.ErrorCode
 	}{
 		{
 			name:     "nil error",
@@ -610,79 +604,79 @@ func TestErrorCodeOf(t *testing.T) {
 		},
 		{
 			name:     "config error - missing public key",
-			err:      ErrMissingPublicKey,
-			expected: ErrCodeConfig,
+			err:      langfuse.ErrMissingPublicKey,
+			expected: langfuse.ErrCodeConfig,
 		},
 		{
 			name:     "config error - missing secret key",
-			err:      ErrMissingSecretKey,
-			expected: ErrCodeConfig,
+			err:      langfuse.ErrMissingSecretKey,
+			expected: langfuse.ErrCodeConfig,
 		},
 		{
 			name:     "config error - missing base URL",
-			err:      ErrMissingBaseURL,
-			expected: ErrCodeConfig,
+			err:      langfuse.ErrMissingBaseURL,
+			expected: langfuse.ErrCodeConfig,
 		},
 		{
 			name:     "config error - invalid config",
-			err:      ErrInvalidConfig,
-			expected: ErrCodeConfig,
+			err:      langfuse.ErrInvalidConfig,
+			expected: langfuse.ErrCodeConfig,
 		},
 		{
 			name:     "shutdown error - client closed",
-			err:      ErrClientClosed,
-			expected: ErrCodeShutdown,
+			err:      langfuse.ErrClientClosed,
+			expected: langfuse.ErrCodeShutdown,
 		},
 		{
 			name:     "timeout error - context cancelled",
-			err:      ErrContextCancelled,
-			expected: ErrCodeTimeout,
+			err:      langfuse.ErrContextCancelled,
+			expected: langfuse.ErrCodeTimeout,
 		},
 		{
 			name:     "network error - circuit open",
-			err:      ErrCircuitOpen,
-			expected: ErrCodeNetwork,
+			err:      langfuse.ErrCircuitOpen,
+			expected: langfuse.ErrCodeNetwork,
 		},
 		{
 			name:     "API error - unauthorized",
-			err:      &APIError{StatusCode: 401},
-			expected: ErrCodeAuth,
+			err:      &langfuse.APIError{StatusCode: 401},
+			expected: langfuse.ErrCodeAuth,
 		},
 		{
 			name:     "API error - forbidden",
-			err:      &APIError{StatusCode: 403},
-			expected: ErrCodeAuth,
+			err:      &langfuse.APIError{StatusCode: 403},
+			expected: langfuse.ErrCodeAuth,
 		},
 		{
 			name:     "API error - rate limited",
-			err:      &APIError{StatusCode: 429},
-			expected: ErrCodeRateLimit,
+			err:      &langfuse.APIError{StatusCode: 429},
+			expected: langfuse.ErrCodeRateLimit,
 		},
 		{
 			name:     "API error - server error",
-			err:      &APIError{StatusCode: 500},
-			expected: ErrCodeAPI,
+			err:      &langfuse.APIError{StatusCode: 500},
+			expected: langfuse.ErrCodeAPI,
 		},
 		{
 			name:     "validation error",
-			err:      NewValidationError("field", "message"),
-			expected: ErrCodeValidation,
+			err:      langfuse.NewValidationError("field", "message"),
+			expected: langfuse.ErrCodeValidation,
 		},
 		{
 			name:     "shutdown error struct",
-			err:      &ShutdownError{Message: "test"},
-			expected: ErrCodeShutdown,
+			err:      &langfuse.ShutdownError{Message: "test"},
+			expected: langfuse.ErrCodeShutdown,
 		},
 		{
 			name:     "unknown error",
 			err:      errors.New("unknown error"),
-			expected: ErrCodeInternal,
+			expected: langfuse.ErrCodeInternal,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := ErrorCodeOf(tt.err)
+			got := langfuse.ErrorCodeOf(tt.err)
 			if got != tt.expected {
 				t.Errorf("ErrorCodeOf() = %v, want %v", got, tt.expected)
 			}
@@ -692,7 +686,7 @@ func TestErrorCodeOf(t *testing.T) {
 
 func TestWrapError(t *testing.T) {
 	t.Run("nil error returns nil", func(t *testing.T) {
-		result := WrapError(nil, "context")
+		result := langfuse.WrapError(nil, "context")
 		if result != nil {
 			t.Errorf("WrapError(nil) should return nil, got %v", result)
 		}
@@ -700,7 +694,7 @@ func TestWrapError(t *testing.T) {
 
 	t.Run("wraps error with context", func(t *testing.T) {
 		original := errors.New("original error")
-		wrapped := WrapError(original, "failed to process")
+		wrapped := langfuse.WrapError(original, "failed to process")
 
 		if wrapped == nil {
 			t.Fatal("WrapError should return wrapped error")
@@ -727,7 +721,7 @@ func TestWrapError(t *testing.T) {
 
 func TestWrapErrorf(t *testing.T) {
 	t.Run("nil error returns nil", func(t *testing.T) {
-		result := WrapErrorf(nil, "context %s", "arg")
+		result := langfuse.WrapErrorf(nil, "context %s", "arg")
 		if result != nil {
 			t.Errorf("WrapErrorf(nil) should return nil, got %v", result)
 		}
@@ -735,7 +729,7 @@ func TestWrapErrorf(t *testing.T) {
 
 	t.Run("wraps error with formatted context", func(t *testing.T) {
 		original := errors.New("original error")
-		wrapped := WrapErrorf(original, "failed to process trace %s", "trace-123")
+		wrapped := langfuse.WrapErrorf(original, "failed to process trace %s", "trace-123")
 
 		if wrapped == nil {
 			t.Fatal("WrapErrorf should return wrapped error")
@@ -755,20 +749,20 @@ func TestWrapErrorf(t *testing.T) {
 func TestAllSentinelErrorsPrefix(t *testing.T) {
 	// Test that all sentinel errors have consistent format
 	sentinels := []error{
-		ErrMissingPublicKey,
-		ErrMissingSecretKey,
-		ErrMissingBaseURL,
-		ErrInvalidConfig,
-		ErrClientClosed,
-		ErrNilRequest,
-		ErrPromptNotFound,
-		ErrDatasetNotFound,
-		ErrTraceNotFound,
-		ErrEmptyBatch,
-		ErrBatchTooLarge,
-		ErrCircuitOpen,
-		ErrContextCancelled,
-		ErrShutdownTimeout,
+		langfuse.ErrMissingPublicKey,
+		langfuse.ErrMissingSecretKey,
+		langfuse.ErrMissingBaseURL,
+		langfuse.ErrInvalidConfig,
+		langfuse.ErrClientClosed,
+		langfuse.ErrNilRequest,
+		langfuse.ErrPromptNotFound,
+		langfuse.ErrDatasetNotFound,
+		langfuse.ErrTraceNotFound,
+		langfuse.ErrEmptyBatch,
+		langfuse.ErrBatchTooLarge,
+		langfuse.ErrCircuitOpen,
+		langfuse.ErrContextCancelled,
+		langfuse.ErrShutdownTimeout,
 	}
 
 	for _, err := range sentinels {
@@ -782,12 +776,12 @@ func TestAllSentinelErrorsPrefix(t *testing.T) {
 func TestIngestionErrorError(t *testing.T) {
 	tests := []struct {
 		name     string
-		err      IngestionError
+		err      langfuse.IngestionError
 		expected string
 	}{
 		{
 			name: "with message",
-			err: IngestionError{
+			err: langfuse.IngestionError{
 				ID:      "event-123",
 				Status:  400,
 				Message: "validation failed",
@@ -796,7 +790,7 @@ func TestIngestionErrorError(t *testing.T) {
 		},
 		{
 			name: "with error message",
-			err: IngestionError{
+			err: langfuse.IngestionError{
 				ID:           "event-456",
 				Status:       500,
 				ErrorMessage: "internal error",
@@ -805,7 +799,7 @@ func TestIngestionErrorError(t *testing.T) {
 		},
 		{
 			name: "message takes precedence",
-			err: IngestionError{
+			err: langfuse.IngestionError{
 				ID:           "event-789",
 				Status:       400,
 				Message:      "primary message",
@@ -815,7 +809,7 @@ func TestIngestionErrorError(t *testing.T) {
 		},
 		{
 			name: "no message",
-			err: IngestionError{
+			err: langfuse.IngestionError{
 				ID:     "event-000",
 				Status: 500,
 			},
@@ -834,8 +828,8 @@ func TestIngestionErrorError(t *testing.T) {
 
 func TestIngestionResultFirstError(t *testing.T) {
 	t.Run("no errors", func(t *testing.T) {
-		result := &IngestionResult{
-			Successes: []IngestionSuccess{{ID: "1", Status: 200}},
+		result := &langfuse.IngestionResult{
+			Successes: []langfuse.IngestionSuccess{{ID: "1", Status: 200}},
 		}
 		if err := result.FirstError(); err != nil {
 			t.Errorf("FirstError() = %v, want nil", err)
@@ -843,8 +837,8 @@ func TestIngestionResultFirstError(t *testing.T) {
 	})
 
 	t.Run("with errors", func(t *testing.T) {
-		result := &IngestionResult{
-			Errors: []IngestionError{
+		result := &langfuse.IngestionResult{
+			Errors: []langfuse.IngestionError{
 				{ID: "1", Status: 400, Message: "first error"},
 				{ID: "2", Status: 400, Message: "second error"},
 			},
@@ -861,7 +855,7 @@ func TestIngestionResultFirstError(t *testing.T) {
 
 func TestNewValidationErrorWithCause(t *testing.T) {
 	cause := errors.New("underlying cause")
-	err := NewValidationErrorWithCause("field_name", "validation message", cause)
+	err := langfuse.NewValidationErrorWithCause("field_name", "validation message", cause)
 
 	if err.Field != "field_name" {
 		t.Errorf("Field = %q, want %q", err.Field, "field_name")
@@ -881,7 +875,7 @@ func TestNewValidationErrorWithCause(t *testing.T) {
 }
 
 func TestAPIErrorString(t *testing.T) {
-	err := &APIError{
+	err := &langfuse.APIError{
 		StatusCode: 400,
 		Message:    "bad request",
 	}
@@ -894,7 +888,7 @@ func TestAPIErrorString(t *testing.T) {
 	}
 
 	// Test with ErrorMessage instead of Message
-	err2 := &APIError{
+	err2 := &langfuse.APIError{
 		StatusCode:   500,
 		ErrorMessage: "server error",
 	}
@@ -907,25 +901,25 @@ func TestAPIErrorString(t *testing.T) {
 func TestRetryAfterFunction(t *testing.T) {
 	t.Run("non-API error", func(t *testing.T) {
 		err := errors.New("generic error")
-		if duration := RetryAfter(err); duration != 0 {
+		if duration := langfuse.RetryAfter(err); duration != 0 {
 			t.Errorf("RetryAfter() = %v, want 0", duration)
 		}
 	})
 
 	t.Run("API error without RetryAfter", func(t *testing.T) {
-		err := &APIError{StatusCode: 429}
-		if duration := RetryAfter(err); duration != 0 {
+		err := &langfuse.APIError{StatusCode: 429}
+		if duration := langfuse.RetryAfter(err); duration != 0 {
 			t.Errorf("RetryAfter() = %v, want 0", duration)
 		}
 	})
 
 	t.Run("API error with RetryAfter", func(t *testing.T) {
-		err := &APIError{
+		err := &langfuse.APIError{
 			StatusCode: 429,
 			RetryAfter: 60000000000, // 60 seconds in nanoseconds
 		}
 		expected := 60000000000
-		if duration := RetryAfter(err); int64(duration) != int64(expected) {
+		if duration := langfuse.RetryAfter(err); int64(duration) != int64(expected) {
 			t.Errorf("RetryAfter() = %v, want %v", duration, expected)
 		}
 	})
@@ -933,7 +927,7 @@ func TestRetryAfterFunction(t *testing.T) {
 
 func TestAPIErrorWithRequestIDExtended(t *testing.T) {
 	t.Run("error with request ID and message", func(t *testing.T) {
-		err := &APIError{
+		err := &langfuse.APIError{
 			StatusCode: 400,
 			Message:    "bad request",
 			RequestID:  "req-123",
@@ -945,7 +939,7 @@ func TestAPIErrorWithRequestIDExtended(t *testing.T) {
 	})
 
 	t.Run("error with request ID without message", func(t *testing.T) {
-		err := &APIError{
+		err := &langfuse.APIError{
 			StatusCode: 500,
 			RequestID:  "req-456",
 		}
@@ -961,7 +955,7 @@ func TestAPIErrorWithRequestIDExtended(t *testing.T) {
 // ============================================================================
 
 func TestAsyncError_Error(t *testing.T) {
-	err := NewAsyncError(AsyncOpBatchSend, errors.New("connection refused"))
+	err := langfuse.NewAsyncError(langfuse.AsyncOpBatchSend, errors.New("connection refused"))
 
 	got := err.Error()
 	if got == "" {
@@ -976,7 +970,7 @@ func TestAsyncError_Error(t *testing.T) {
 }
 
 func TestAsyncError_ErrorWithEventIDs(t *testing.T) {
-	err := NewAsyncError(AsyncOpBatchSend, errors.New("failed")).
+	err := langfuse.NewAsyncError(langfuse.AsyncOpBatchSend, errors.New("failed")).
 		WithEventIDs("id1", "id2", "id3")
 
 	got := err.Error()
@@ -987,7 +981,7 @@ func TestAsyncError_ErrorWithEventIDs(t *testing.T) {
 
 func TestAsyncError_Unwrap(t *testing.T) {
 	underlying := errors.New("underlying error")
-	err := NewAsyncError(AsyncOpFlush, underlying)
+	err := langfuse.NewAsyncError(langfuse.AsyncOpFlush, underlying)
 
 	if errors.Unwrap(err) != underlying {
 		t.Error("Unwrap() did not return underlying error")
@@ -995,7 +989,7 @@ func TestAsyncError_Unwrap(t *testing.T) {
 }
 
 func TestAsyncError_WithMethods(t *testing.T) {
-	err := NewAsyncError(AsyncOpQueue, errors.New("queue full")).
+	err := langfuse.NewAsyncError(langfuse.AsyncOpQueue, errors.New("queue full")).
 		WithRetryable(true).
 		WithContext("size", 1000).
 		WithContext("capacity", 1000).
@@ -1016,7 +1010,7 @@ func TestAsyncError_WithMethods(t *testing.T) {
 }
 
 func TestAsyncErrorHandler_Creation(t *testing.T) {
-	h := NewAsyncErrorHandler(nil)
+	h := langfuse.NewAsyncErrorHandler(nil)
 
 	if h.Errors == nil {
 		t.Error("Errors channel is nil")
@@ -1027,7 +1021,7 @@ func TestAsyncErrorHandler_Creation(t *testing.T) {
 }
 
 func TestAsyncErrorHandler_CustomBufferSize(t *testing.T) {
-	h := NewAsyncErrorHandler(&AsyncErrorConfig{
+	h := langfuse.NewAsyncErrorHandler(&langfuse.AsyncErrorConfig{
 		BufferSize: 50,
 	})
 
@@ -1037,11 +1031,11 @@ func TestAsyncErrorHandler_CustomBufferSize(t *testing.T) {
 }
 
 func TestAsyncErrorHandler_Handle(t *testing.T) {
-	h := NewAsyncErrorHandler(&AsyncErrorConfig{
+	h := langfuse.NewAsyncErrorHandler(&langfuse.AsyncErrorConfig{
 		BufferSize: 10,
 	})
 
-	err := NewAsyncError(AsyncOpBatchSend, errors.New("test error"))
+	err := langfuse.NewAsyncError(langfuse.AsyncOpBatchSend, errors.New("test error"))
 	h.Handle(err)
 
 	if h.TotalErrors() != 1 {
@@ -1064,7 +1058,7 @@ func TestAsyncErrorHandler_Handle(t *testing.T) {
 }
 
 func TestAsyncErrorHandler_HandleNil(t *testing.T) {
-	h := NewAsyncErrorHandler(nil)
+	h := langfuse.NewAsyncErrorHandler(nil)
 	h.Handle(nil)
 
 	if h.TotalErrors() != 0 {
@@ -1073,18 +1067,18 @@ func TestAsyncErrorHandler_HandleNil(t *testing.T) {
 }
 
 func TestAsyncErrorHandler_Callback(t *testing.T) {
-	var received *AsyncError
+	var received *langfuse.AsyncError
 	var mu sync.Mutex
 
-	h := NewAsyncErrorHandler(&AsyncErrorConfig{
-		OnError: func(err *AsyncError) {
+	h := langfuse.NewAsyncErrorHandler(&langfuse.AsyncErrorConfig{
+		OnError: func(err *langfuse.AsyncError) {
 			mu.Lock()
 			received = err
 			mu.Unlock()
 		},
 	})
 
-	err := NewAsyncError(AsyncOpFlush, errors.New("callback test"))
+	err := langfuse.NewAsyncError(langfuse.AsyncOpFlush, errors.New("callback test"))
 	h.Handle(err)
 
 	mu.Lock()
@@ -1097,14 +1091,14 @@ func TestAsyncErrorHandler_Callback(t *testing.T) {
 }
 
 func TestAsyncErrorHandler_SetCallback(t *testing.T) {
-	h := NewAsyncErrorHandler(nil)
+	h := langfuse.NewAsyncErrorHandler(nil)
 
 	var called bool
-	h.SetCallback(func(err *AsyncError) {
+	h.SetCallback(func(err *langfuse.AsyncError) {
 		called = true
 	})
 
-	h.Handle(NewAsyncError(AsyncOpInternal, errors.New("test")))
+	h.Handle(langfuse.NewAsyncError(langfuse.AsyncOpInternal, errors.New("test")))
 
 	if !called {
 		t.Error("SetCallback callback was not called")
@@ -1115,7 +1109,7 @@ func TestAsyncErrorHandler_Overflow(t *testing.T) {
 	var overflowCount int
 	var mu sync.Mutex
 
-	h := NewAsyncErrorHandler(&AsyncErrorConfig{
+	h := langfuse.NewAsyncErrorHandler(&langfuse.AsyncErrorConfig{
 		BufferSize: 2,
 		OnOverflow: func(dropped int) {
 			mu.Lock()
@@ -1125,11 +1119,11 @@ func TestAsyncErrorHandler_Overflow(t *testing.T) {
 	})
 
 	// Fill the buffer
-	h.Handle(NewAsyncError(AsyncOpBatchSend, errors.New("1")))
-	h.Handle(NewAsyncError(AsyncOpBatchSend, errors.New("2")))
+	h.Handle(langfuse.NewAsyncError(langfuse.AsyncOpBatchSend, errors.New("1")))
+	h.Handle(langfuse.NewAsyncError(langfuse.AsyncOpBatchSend, errors.New("2")))
 
 	// This should overflow
-	h.Handle(NewAsyncError(AsyncOpBatchSend, errors.New("3")))
+	h.Handle(langfuse.NewAsyncError(langfuse.AsyncOpBatchSend, errors.New("3")))
 
 	if h.DroppedCount() != 1 {
 		t.Errorf("DroppedCount() = %d, want 1", h.DroppedCount())
@@ -1145,13 +1139,13 @@ func TestAsyncErrorHandler_Overflow(t *testing.T) {
 }
 
 func TestAsyncErrorHandler_Drain(t *testing.T) {
-	h := NewAsyncErrorHandler(&AsyncErrorConfig{
+	h := langfuse.NewAsyncErrorHandler(&langfuse.AsyncErrorConfig{
 		BufferSize: 10,
 	})
 
 	// Add errors
 	for i := 0; i < 5; i++ {
-		h.Handle(NewAsyncError(AsyncOpBatchSend, errors.New("test")))
+		h.Handle(langfuse.NewAsyncError(langfuse.AsyncOpBatchSend, errors.New("test")))
 	}
 
 	drainedErrors := h.Drain()
@@ -1165,12 +1159,12 @@ func TestAsyncErrorHandler_Drain(t *testing.T) {
 }
 
 func TestAsyncErrorHandler_Stats(t *testing.T) {
-	h := NewAsyncErrorHandler(&AsyncErrorConfig{
+	h := langfuse.NewAsyncErrorHandler(&langfuse.AsyncErrorConfig{
 		BufferSize: 10,
 	})
 
-	h.Handle(NewAsyncError(AsyncOpBatchSend, errors.New("1")))
-	h.Handle(NewAsyncError(AsyncOpFlush, errors.New("2")))
+	h.Handle(langfuse.NewAsyncError(langfuse.AsyncOpBatchSend, errors.New("1")))
+	h.Handle(langfuse.NewAsyncError(langfuse.AsyncOpFlush, errors.New("2")))
 
 	stats := h.Stats()
 	if stats.TotalErrors != 2 {
@@ -1185,25 +1179,25 @@ func TestAsyncErrorHandler_Stats(t *testing.T) {
 }
 
 func TestAsyncErrorHandler_ErrorsByOperation(t *testing.T) {
-	h := NewAsyncErrorHandler(nil)
+	h := langfuse.NewAsyncErrorHandler(nil)
 
-	h.Handle(NewAsyncError(AsyncOpBatchSend, errors.New("1")))
-	h.Handle(NewAsyncError(AsyncOpBatchSend, errors.New("2")))
-	h.Handle(NewAsyncError(AsyncOpFlush, errors.New("3")))
+	h.Handle(langfuse.NewAsyncError(langfuse.AsyncOpBatchSend, errors.New("1")))
+	h.Handle(langfuse.NewAsyncError(langfuse.AsyncOpBatchSend, errors.New("2")))
+	h.Handle(langfuse.NewAsyncError(langfuse.AsyncOpFlush, errors.New("3")))
 
-	if h.ErrorsByOperation(AsyncOpBatchSend) != 2 {
-		t.Errorf("ErrorsByOperation(batch_send) = %d, want 2", h.ErrorsByOperation(AsyncOpBatchSend))
+	if h.ErrorsByOperation(langfuse.AsyncOpBatchSend) != 2 {
+		t.Errorf("ErrorsByOperation(batch_send) = %d, want 2", h.ErrorsByOperation(langfuse.AsyncOpBatchSend))
 	}
-	if h.ErrorsByOperation(AsyncOpFlush) != 1 {
-		t.Errorf("ErrorsByOperation(flush) = %d, want 1", h.ErrorsByOperation(AsyncOpFlush))
+	if h.ErrorsByOperation(langfuse.AsyncOpFlush) != 1 {
+		t.Errorf("ErrorsByOperation(flush) = %d, want 1", h.ErrorsByOperation(langfuse.AsyncOpFlush))
 	}
-	if h.ErrorsByOperation(AsyncOpHook) != 0 {
-		t.Errorf("ErrorsByOperation(hook) = %d, want 0", h.ErrorsByOperation(AsyncOpHook))
+	if h.ErrorsByOperation(langfuse.AsyncOpHook) != 0 {
+		t.Errorf("ErrorsByOperation(hook) = %d, want 0", h.ErrorsByOperation(langfuse.AsyncOpHook))
 	}
 }
 
 func TestAsyncErrorHandler_ConcurrentAccess(t *testing.T) {
-	h := NewAsyncErrorHandler(&AsyncErrorConfig{
+	h := langfuse.NewAsyncErrorHandler(&langfuse.AsyncErrorConfig{
 		BufferSize: 1000,
 	})
 
@@ -1211,12 +1205,12 @@ func TestAsyncErrorHandler_ConcurrentAccess(t *testing.T) {
 	const goroutines = 10
 	const iterations = 100
 
-	for i := 0; i < goroutines; i++ {
+	for range goroutines {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for j := 0; j < iterations; j++ {
-				h.Handle(NewAsyncError(AsyncOpBatchSend, errors.New("concurrent")))
+			for range iterations {
+				h.Handle(langfuse.NewAsyncError(langfuse.AsyncOpBatchSend, errors.New("concurrent")))
 				_ = h.TotalErrors()
 				_ = h.DroppedCount()
 				_ = h.Pending()
@@ -1233,9 +1227,9 @@ func TestAsyncErrorHandler_ConcurrentAccess(t *testing.T) {
 }
 
 func TestAsyncErrorHandler_Close(t *testing.T) {
-	h := NewAsyncErrorHandler(nil)
+	h := langfuse.NewAsyncErrorHandler(nil)
 
-	h.Handle(NewAsyncError(AsyncOpBatchSend, errors.New("test")))
+	h.Handle(langfuse.NewAsyncError(langfuse.AsyncOpBatchSend, errors.New("test")))
 	h.Close()
 
 	// Channel should be closed
@@ -1251,11 +1245,11 @@ func TestAsyncErrorHandler_Close(t *testing.T) {
 
 func TestAsyncErrorHandler_WithMetrics(t *testing.T) {
 	metrics := &testMetrics{}
-	h := NewAsyncErrorHandler(&AsyncErrorConfig{
+	h := langfuse.NewAsyncErrorHandler(&langfuse.AsyncErrorConfig{
 		Metrics: metrics,
 	})
 
-	h.Handle(NewAsyncError(AsyncOpBatchSend, errors.New("test")).WithRetryable(true))
+	h.Handle(langfuse.NewAsyncError(langfuse.AsyncOpBatchSend, errors.New("test")).WithRetryable(true))
 
 	if metrics.counters["langfuse.async_errors.total"] != 1 {
 		t.Error("metrics.IncrementCounter not called for total")
@@ -1269,14 +1263,14 @@ func TestAsyncErrorHandler_WithMetrics(t *testing.T) {
 }
 
 func TestWrapAsyncError_Nil(t *testing.T) {
-	if WrapAsyncError(AsyncOpBatchSend, nil) != nil {
+	if langfuse.WrapAsyncError(langfuse.AsyncOpBatchSend, nil) != nil {
 		t.Error("WrapAsyncError(nil) should return nil")
 	}
 }
 
 func TestWrapAsyncError_AlreadyAsyncError(t *testing.T) {
-	original := NewAsyncError(AsyncOpFlush, errors.New("original"))
-	wrapped := WrapAsyncError(AsyncOpBatchSend, original)
+	original := langfuse.NewAsyncError(langfuse.AsyncOpFlush, errors.New("original"))
+	wrapped := langfuse.WrapAsyncError(langfuse.AsyncOpBatchSend, original)
 
 	if wrapped != original {
 		t.Error("WrapAsyncError should return existing AsyncError as-is")
@@ -1285,12 +1279,12 @@ func TestWrapAsyncError_AlreadyAsyncError(t *testing.T) {
 
 func TestWrapAsyncError_RegularError(t *testing.T) {
 	regular := errors.New("regular error")
-	wrapped := WrapAsyncError(AsyncOpBatchSend, regular)
+	wrapped := langfuse.WrapAsyncError(langfuse.AsyncOpBatchSend, regular)
 
 	if wrapped == nil {
 		t.Fatal("WrapAsyncError returned nil")
 	}
-	if wrapped.Operation != AsyncOpBatchSend {
+	if wrapped.Operation != langfuse.AsyncOpBatchSend {
 		t.Errorf("Operation = %v, want batch_send", wrapped.Operation)
 	}
 	if wrapped.Err != regular {
@@ -1300,7 +1294,7 @@ func TestWrapAsyncError_RegularError(t *testing.T) {
 
 func TestAsyncError_Time(t *testing.T) {
 	before := time.Now()
-	err := NewAsyncError(AsyncOpBatchSend, errors.New("test"))
+	err := langfuse.NewAsyncError(langfuse.AsyncOpBatchSend, errors.New("test"))
 	after := time.Now()
 
 	if err.Time.Before(before) || err.Time.After(after) {

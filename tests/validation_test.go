@@ -1,14 +1,16 @@
-package langfuse
+package langfuse_test
 
 import (
 	"context"
 	"strings"
 	"testing"
+
+	langfuse "github.com/jdziat/langfuse-go"
 )
 
 func TestValidator(t *testing.T) {
 	t.Run("initially has no errors", func(t *testing.T) {
-		v := &Validator{}
+		v := &langfuse.Validator{}
 		if v.HasErrors() {
 			t.Error("new validator should have no errors")
 		}
@@ -18,8 +20,8 @@ func TestValidator(t *testing.T) {
 	})
 
 	t.Run("AddError adds error", func(t *testing.T) {
-		v := &Validator{}
-		v.AddError(ErrNilRequest)
+		v := &langfuse.Validator{}
+		v.AddError(langfuse.ErrNilRequest)
 
 		if !v.HasErrors() {
 			t.Error("should have errors after AddError")
@@ -30,7 +32,7 @@ func TestValidator(t *testing.T) {
 	})
 
 	t.Run("AddFieldError adds validation error", func(t *testing.T) {
-		v := &Validator{}
+		v := &langfuse.Validator{}
 		v.AddFieldError("name", "is required")
 
 		if !v.HasErrors() {
@@ -38,7 +40,7 @@ func TestValidator(t *testing.T) {
 		}
 
 		err := v.Errors()[0]
-		valErr, ok := AsValidationError(err)
+		valErr, ok := langfuse.AsValidationError(err)
 		if !ok {
 			t.Error("error should be ValidationError")
 		}
@@ -48,8 +50,8 @@ func TestValidator(t *testing.T) {
 	})
 
 	t.Run("ClearErrors clears all errors", func(t *testing.T) {
-		v := &Validator{}
-		v.AddError(ErrNilRequest)
+		v := &langfuse.Validator{}
+		v.AddError(langfuse.ErrNilRequest)
 		v.AddFieldError("test", "error")
 
 		v.ClearErrors()
@@ -60,24 +62,24 @@ func TestValidator(t *testing.T) {
 	})
 
 	t.Run("CombinedError returns nil for no errors", func(t *testing.T) {
-		v := &Validator{}
+		v := &langfuse.Validator{}
 		if v.CombinedError() != nil {
 			t.Error("CombinedError should return nil for no errors")
 		}
 	})
 
 	t.Run("CombinedError returns single error directly", func(t *testing.T) {
-		v := &Validator{}
-		v.AddError(ErrNilRequest)
+		v := &langfuse.Validator{}
+		v.AddError(langfuse.ErrNilRequest)
 
 		combined := v.CombinedError()
-		if combined != ErrNilRequest {
+		if combined != langfuse.ErrNilRequest {
 			t.Error("CombinedError should return single error directly")
 		}
 	})
 
 	t.Run("CombinedError combines multiple errors", func(t *testing.T) {
-		v := &Validator{}
+		v := &langfuse.Validator{}
 		v.AddFieldError("name", "is required")
 		v.AddFieldError("value", "must be positive")
 
@@ -110,7 +112,7 @@ func TestValidateID(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateID("id", tt.value)
+			err := langfuse.ValidateID("id", tt.value)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ValidateID() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -133,7 +135,7 @@ func TestValidateIDFormat(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateIDFormat("id", tt.value)
+			err := langfuse.ValidateIDFormat("id", tt.value)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ValidateIDFormat() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -157,7 +159,7 @@ func TestValidateName(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateName("name", tt.value, tt.maxLength)
+			err := langfuse.ValidateName("name", tt.value, tt.maxLength)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ValidateName() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -168,19 +170,19 @@ func TestValidateName(t *testing.T) {
 func TestValidateMetadata(t *testing.T) {
 	tests := []struct {
 		name     string
-		metadata Metadata
+		metadata langfuse.Metadata
 		wantErr  bool
 	}{
 		{"nil metadata", nil, false},
-		{"empty metadata", Metadata{}, false},
-		{"valid metadata", Metadata{"key": "value"}, false},
-		{"empty key", Metadata{"": "value"}, true},
-		{"multiple keys with one empty", Metadata{"valid": "value", "": "bad"}, true},
+		{"empty metadata", langfuse.Metadata{}, false},
+		{"valid metadata", langfuse.Metadata{"key": "value"}, false},
+		{"empty key", langfuse.Metadata{"": "value"}, true},
+		{"multiple keys with one empty", langfuse.Metadata{"valid": "value", "": "bad"}, true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateMetadata("metadata", tt.metadata)
+			err := langfuse.ValidateMetadata("metadata", tt.metadata)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ValidateMetadata() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -203,7 +205,7 @@ func TestValidateTags(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateTags("tags", tt.tags)
+			err := langfuse.ValidateTags("tags", tt.tags)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ValidateTags() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -214,20 +216,20 @@ func TestValidateTags(t *testing.T) {
 func TestValidateLevel(t *testing.T) {
 	tests := []struct {
 		name    string
-		level   ObservationLevel
+		level   langfuse.ObservationLevel
 		wantErr bool
 	}{
 		{"empty level", "", false},
-		{"debug level", ObservationLevelDebug, false},
-		{"default level", ObservationLevelDefault, false},
-		{"warning level", ObservationLevelWarning, false},
-		{"error level", ObservationLevelError, false},
-		{"invalid level", ObservationLevel("invalid"), true},
+		{"debug level", langfuse.ObservationLevelDebug, false},
+		{"default level", langfuse.ObservationLevelDefault, false},
+		{"warning level", langfuse.ObservationLevelWarning, false},
+		{"error level", langfuse.ObservationLevelError, false},
+		{"invalid level", langfuse.ObservationLevel("invalid"), true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateLevel("level", tt.level)
+			err := langfuse.ValidateLevel("level", tt.level)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ValidateLevel() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -238,19 +240,19 @@ func TestValidateLevel(t *testing.T) {
 func TestValidateDataType(t *testing.T) {
 	tests := []struct {
 		name     string
-		dataType ScoreDataType
+		dataType langfuse.ScoreDataType
 		wantErr  bool
 	}{
 		{"empty data type", "", false},
-		{"numeric", ScoreDataTypeNumeric, false},
-		{"categorical", ScoreDataTypeCategorical, false},
-		{"boolean", ScoreDataTypeBoolean, false},
-		{"invalid", ScoreDataType("invalid"), true},
+		{"numeric", langfuse.ScoreDataTypeNumeric, false},
+		{"categorical", langfuse.ScoreDataTypeCategorical, false},
+		{"boolean", langfuse.ScoreDataTypeBoolean, false},
+		{"invalid", langfuse.ScoreDataType("invalid"), true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateDataType("dataType", tt.dataType)
+			err := langfuse.ValidateDataType("dataType", tt.dataType)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ValidateDataType() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -259,7 +261,7 @@ func TestValidateDataType(t *testing.T) {
 }
 
 func TestTraceBuilderValidation(t *testing.T) {
-	client, err := New("pk-lf-test-key", "sk-lf-test-key")
+	client, err := langfuse.New("pk-lf-test-key", "sk-lf-test-key")
 	if err != nil {
 		t.Fatalf("Failed to create client: %v", err)
 	}
@@ -273,7 +275,7 @@ func TestTraceBuilderValidation(t *testing.T) {
 		builder := client.NewTrace().
 			Name("test-trace").
 			Tags([]string{"production"}).
-			Metadata(Metadata{"key": "value"})
+			Metadata(langfuse.Metadata{"key": "value"})
 
 		if builder.HasErrors() {
 			t.Error("valid trace should have no errors")
@@ -293,7 +295,7 @@ func TestTraceBuilderValidation(t *testing.T) {
 	t.Run("empty metadata key triggers error", func(t *testing.T) {
 		builder := client.NewTrace().
 			Name("test-trace").
-			Metadata(Metadata{"": "value"})
+			Metadata(langfuse.Metadata{"": "value"})
 
 		if !builder.HasErrors() {
 			t.Error("empty metadata key should trigger error")
@@ -301,7 +303,7 @@ func TestTraceBuilderValidation(t *testing.T) {
 	})
 
 	t.Run("too many tags triggers error", func(t *testing.T) {
-		tags := make([]string, MaxTagCount+1)
+		tags := make([]string, langfuse.MaxTagCount+1)
 		for i := range tags {
 			tags[i] = "tag"
 		}
@@ -318,7 +320,7 @@ func TestTraceBuilderValidation(t *testing.T) {
 	t.Run("Validate returns accumulated errors", func(t *testing.T) {
 		builder := client.NewTrace().
 			Tags([]string{""}).
-			Metadata(Metadata{"": "value"})
+			Metadata(langfuse.Metadata{"": "value"})
 
 		err := builder.Validate()
 		if err == nil {
@@ -328,7 +330,7 @@ func TestTraceBuilderValidation(t *testing.T) {
 }
 
 func TestScoreBuilderValidationOnSet(t *testing.T) {
-	client, err := New("pk-lf-test-key", "sk-lf-test-key")
+	client, err := langfuse.New("pk-lf-test-key", "sk-lf-test-key")
 	if err != nil {
 		t.Fatalf("Failed to create client: %v", err)
 	}
@@ -366,7 +368,7 @@ func TestScoreBuilderValidationOnSet(t *testing.T) {
 	t.Run("empty metadata key triggers error", func(t *testing.T) {
 		builder := trace.NewScore().
 			Name("quality").
-			Metadata(Metadata{"": "value"})
+			Metadata(langfuse.Metadata{"": "value"})
 
 		if !builder.HasErrors() {
 			t.Error("empty metadata key should trigger error")
