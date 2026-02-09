@@ -8,67 +8,69 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	pkgconfig "github.com/jdziat/langfuse-go/pkg/config"
 )
 
-// Default configuration values.
+// Default configuration values (re-exported from pkg/config for backward compatibility).
 const (
 	// DefaultTimeout is the default request timeout.
-	DefaultTimeout = 30 * time.Second
+	DefaultTimeout = pkgconfig.DefaultTimeout
 
 	// DefaultMaxRetries is the default maximum number of retry attempts.
-	DefaultMaxRetries = 3
+	DefaultMaxRetries = pkgconfig.DefaultMaxRetries
 
 	// DefaultRetryDelay is the default initial delay between retry attempts.
-	DefaultRetryDelay = 1 * time.Second
+	DefaultRetryDelay = pkgconfig.DefaultRetryDelay
 
 	// DefaultBatchSize is the default maximum number of events per batch.
-	DefaultBatchSize = 100
+	DefaultBatchSize = pkgconfig.DefaultBatchSize
 
 	// DefaultFlushInterval is the default interval for flushing pending events.
-	DefaultFlushInterval = 5 * time.Second
+	DefaultFlushInterval = pkgconfig.DefaultFlushInterval
 
 	// DefaultMaxIdleConns is the default maximum number of idle connections.
-	DefaultMaxIdleConns = 100
+	DefaultMaxIdleConns = pkgconfig.DefaultMaxIdleConns
 
 	// DefaultMaxIdleConnsPerHost is the default maximum idle connections per host.
-	DefaultMaxIdleConnsPerHost = 10
+	DefaultMaxIdleConnsPerHost = pkgconfig.DefaultMaxIdleConnsPerHost
 
 	// DefaultIdleConnTimeout is the default timeout for idle connections.
-	DefaultIdleConnTimeout = 90 * time.Second
+	DefaultIdleConnTimeout = pkgconfig.DefaultIdleConnTimeout
 
 	// DefaultShutdownTimeout is the default graceful shutdown timeout.
 	// Must be >= DefaultTimeout to allow pending requests to complete.
-	DefaultShutdownTimeout = 35 * time.Second
+	DefaultShutdownTimeout = pkgconfig.DefaultShutdownTimeout
 
 	// DefaultBatchQueueSize is the default size of the background batch queue.
-	DefaultBatchQueueSize = 100
+	DefaultBatchQueueSize = pkgconfig.DefaultBatchQueueSize
 
 	// DefaultBackgroundSendTimeout is the timeout for background batch sends.
-	DefaultBackgroundSendTimeout = 30 * time.Second
+	DefaultBackgroundSendTimeout = pkgconfig.DefaultBackgroundSendTimeout
 
 	// MaxBatchSize is the maximum allowed batch size.
-	MaxBatchSize = 10000
+	MaxBatchSize = pkgconfig.MaxBatchSize
 
 	// MaxMaxRetries is the maximum allowed retry count.
-	MaxMaxRetries = 100
+	MaxMaxRetries = pkgconfig.MaxMaxRetries
 
 	// MaxTimeout is the maximum allowed request timeout.
-	MaxTimeout = 10 * time.Minute
+	MaxTimeout = pkgconfig.MaxTimeout
 
 	// MinFlushInterval is the minimum allowed flush interval.
-	MinFlushInterval = 100 * time.Millisecond
+	MinFlushInterval = pkgconfig.MinFlushInterval
 
 	// MinShutdownTimeout is the minimum allowed shutdown timeout.
-	MinShutdownTimeout = 1 * time.Second
+	MinShutdownTimeout = pkgconfig.MinShutdownTimeout
 
 	// MinKeyLength is the minimum length for API keys.
-	MinKeyLength = 8
+	MinKeyLength = pkgconfig.MinKeyLength
 
 	// PublicKeyPrefix is the expected prefix for public keys.
-	PublicKeyPrefix = "pk-"
+	PublicKeyPrefix = pkgconfig.PublicKeyPrefix
 
 	// SecretKeyPrefix is the expected prefix for secret keys.
-	SecretKeyPrefix = "sk-"
+	SecretKeyPrefix = pkgconfig.SecretKeyPrefix
 )
 
 // Config holds the configuration for the Langfuse client.
