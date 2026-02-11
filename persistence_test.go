@@ -108,8 +108,17 @@ func TestEventPersistence_LoadEmpty(t *testing.T) {
 }
 
 func TestEventPersistence_LoadNonExistent(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "nonexistent")
-	p := &EventPersistence{dir: dir}
+	// Create persistence with a temp dir, then delete the dir to simulate non-existent
+	dir := filepath.Join(t.TempDir(), "events")
+	p, err := NewEventPersistence(dir)
+	if err != nil {
+		t.Fatalf("NewEventPersistence() error = %v", err)
+	}
+
+	// Remove the directory to simulate non-existent
+	if err := os.RemoveAll(dir); err != nil {
+		t.Fatalf("failed to remove test directory: %v", err)
+	}
 
 	// Should not error on non-existent directory
 	events, err := p.Load()
@@ -360,11 +369,12 @@ func TestManagedPersistence_AppliesDefaults(t *testing.T) {
 	}
 	defer mp.Stop()
 
-	if mp.config.MaxAge != 7*24*time.Hour {
-		t.Errorf("MaxAge = %v, want 7d", mp.config.MaxAge)
+	config := mp.Config()
+	if config.MaxAge != 7*24*time.Hour {
+		t.Errorf("MaxAge = %v, want 7d", config.MaxAge)
 	}
-	if mp.config.MaxFiles != 1000 {
-		t.Errorf("MaxFiles = %d, want 1000", mp.config.MaxFiles)
+	if config.MaxFiles != 1000 {
+		t.Errorf("MaxFiles = %d, want 1000", config.MaxFiles)
 	}
 }
 
@@ -428,7 +438,7 @@ func TestManagedPersistence_LimitsFileCount(t *testing.T) {
 	}
 
 	// Run cleanup
-	mp.runCleanup()
+	mp.RunCleanup()
 
 	count, _ = mp.Count()
 	if count != 3 {

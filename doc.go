@@ -131,3 +131,7 @@
 //   - examples/advanced: Complex traces with spans and nested generations
 //   - examples/evaluation: RAG and Q&A evaluation workflows
 package langfuse
+
+// Version is the current SDK version.
+// This is used in User-Agent headers and for debugging.
+const Version = "1.0.0"
