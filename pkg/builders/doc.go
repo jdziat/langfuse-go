@@ -1,12 +1,29 @@
-// Package builders provides fluent builder patterns for constructing Langfuse data types.
+// Package builders provides fluent builder patterns and validation for Langfuse data types.
 //
-// This package contains helper builders that are independent of the Client:
+// This package contains:
+//
+// # Data Builders
+//
 //   - [MetadataBuilder] for constructing type-safe metadata
 //   - [TagsBuilder] for constructing tag slices
 //   - [UsageBuilder] for constructing token usage stats
 //   - [ModelParametersBuilder] for constructing model parameters
 //
-// These builders are re-exported from the root langfuse package for convenience.
+// # Validation
+//
+//   - [Validator] for accumulating validation errors in builders
+//   - Validation functions: ValidateID, ValidateName, ValidateMetadata, etc.
+//   - Constants: MaxNameLength, MaxTagLength, MaxTagCount
+//
+// # Result Types
+//
+//   - [BuildResult] generic type for wrapping builder results with errors
+//
+// # Interfaces
+//
+//   - [EventQueuer] interface for event submission (used by builders)
+//
+// These types are re-exported from the root langfuse package for convenience.
 //
 // Example usage:
 //
@@ -23,15 +40,8 @@
 //	    Environment("prod").
 //	    Build()
 //
-//	// Build token usage
-//	usage := builders.NewUsage().
-//	    Input(100).
-//	    Output(50).
-//	    Build()
-//
-//	// Build model parameters
-//	params := builders.NewModelParameters().
-//	    Temperature(0.7).
-//	    MaxTokens(150).
-//	    Build()
+//	// Validate input
+//	if err := builders.ValidateID("traceId", id); err != nil {
+//	    return err
+//	}
 package builders
