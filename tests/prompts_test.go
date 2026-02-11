@@ -445,7 +445,7 @@ func TestPromptCompileChatMessagesWithErrors(t *testing.T) {
 		prompt := &langfuse.Prompt{
 			Name: "chat",
 			Prompt: []any{
-				map[string]any{},                                   // missing both role and content
+				map[string]any{}, // missing both role and content
 				map[string]any{"role": "user", "content": "valid"}, // valid
 				"invalid", // wrong type
 			},
