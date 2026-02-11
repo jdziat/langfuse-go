@@ -9,12 +9,12 @@ import (
 // TestAPIError_Creation tests creating and using APIError.
 func TestAPIError_Creation(t *testing.T) {
 	tests := []struct {
-		name       string
-		apiErr     *APIError
-		wantMsg    string
-		wantCode   ErrorCode
-		wantRetry  bool
-		wantReqID  string
+		name      string
+		apiErr    *APIError
+		wantMsg   string
+		wantCode  ErrorCode
+		wantRetry bool
+		wantReqID string
 	}{
 		{
 			name: "not found",
@@ -134,13 +134,13 @@ func TestAPIError_Is(t *testing.T) {
 // TestAPIError_Methods tests APIError convenience methods.
 func TestAPIError_Methods(t *testing.T) {
 	tests := []struct {
-		name           string
-		statusCode     int
-		wantNotFound   bool
-		wantUnauth     bool
-		wantForbidden  bool
-		wantRateLimit  bool
-		wantServerErr  bool
+		name          string
+		statusCode    int
+		wantNotFound  bool
+		wantUnauth    bool
+		wantForbidden bool
+		wantRateLimit bool
+		wantServerErr bool
 	}{
 		{"not found", 404, true, false, false, false, false},
 		{"unauthorized", 401, false, true, false, false, false},

@@ -136,7 +136,7 @@ func WithOnBatchFlushed(fn func(BatchResult)) ConfigOption {
 	}
 }
 
-// WithIDleWarningDuration sets the idle warning duration.
+// WithIdleWarningDuration sets the idle warning duration.
 func WithIdleWarningDuration(duration time.Duration) ConfigOption {
 	return func(c *Config) {
 		c.IdleWarningDuration = duration

@@ -6,13 +6,15 @@ import (
 
 	pkgerrors "github.com/jdziat/langfuse-go/pkg/errors"
 	pkgingestion "github.com/jdziat/langfuse-go/pkg/ingestion"
+	pkgtypes "github.com/jdziat/langfuse-go/pkg/types"
 )
 
 // Re-export backpressure types from pkg/ingestion for convenience.
 type (
-	BackpressureLevel    = pkgingestion.BackpressureLevel
-	BackpressureDecision = pkgingestion.BackpressureDecision
-	QueueState           = pkgingestion.QueueState
+	BackpressureLevel        = pkgingestion.BackpressureLevel
+	BackpressureDecision     = pkgingestion.BackpressureDecision
+	BackpressureHandlerStats = pkgingestion.BackpressureHandlerStats
+	QueueState               = pkgingestion.QueueState
 )
 
 // Backpressure level constants.
@@ -173,14 +175,14 @@ func (c *Client) flushLoop() {
 	}
 }
 
-// queueEvent adds an event to the pending queue.
+// QueueEvent adds an event to the pending queue.
 // The provided context is used for immediate batch sends when the batch is full.
 //
 // Backpressure handling:
 //   - If configured with BlockOnQueueFull, this will block until space is available
 //   - If configured with DropOnQueueFull, events are silently dropped when full
 //   - Otherwise, events are queued normally (may overflow)
-func (c *Client) queueEvent(ctx context.Context, event IngestionEvent) error {
+func (c *Client) QueueEvent(ctx context.Context, event IngestionEvent) error {
 	// Record activity for idle detection
 	if c.lifecycle != nil {
 		c.lifecycle.RecordActivity()
@@ -557,7 +559,5 @@ func (c *Client) Health(ctx context.Context) (*HealthStatus, error) {
 	return &result, nil
 }
 
-// HealthStatus represents the health status response.
-type HealthStatus struct {
-	Status string `json:"status"`
-}
+// HealthStatus is re-exported from pkg/types for consistency.
+type HealthStatus = pkgtypes.HealthStatus

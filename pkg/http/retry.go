@@ -21,7 +21,7 @@ type RetryableError interface {
 // RetryAfterError is an interface for errors with retry-after hints.
 type RetryAfterError interface {
 	error
-	RetryAfter() time.Duration
+	SuggestedRetryAfter() time.Duration
 }
 
 // IsRetryableNetworkError determines if a network error is transient and should be retried.
@@ -192,12 +192,12 @@ func (e *ExponentialBackoff) RetryDelay(attempt int) time.Duration {
 }
 
 // RetryDelayWithError implements RetryStrategyWithError.RetryDelayWithError.
-// If the error implements RetryAfterError with a RetryAfter value from the server,
+// If the error implements RetryAfterError with a SuggestedRetryAfter value from the server,
 // that value is used (capped at MaxDelay).
 func (e *ExponentialBackoff) RetryDelayWithError(attempt int, err error) time.Duration {
 	// Check if error has a Retry-After hint from the server
 	if retryAfterErr, ok := err.(RetryAfterError); ok {
-		retryAfter := retryAfterErr.RetryAfter()
+		retryAfter := retryAfterErr.SuggestedRetryAfter()
 		if retryAfter > 0 {
 			maxDelay := e.MaxDelay
 			if maxDelay == 0 {

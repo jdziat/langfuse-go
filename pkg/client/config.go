@@ -15,7 +15,7 @@ import (
 	pkgingestion "github.com/jdziat/langfuse-go/pkg/ingestion"
 )
 
-// Re-export Region from pkg/config
+// Region is re-exported from pkg/config for convenience.
 type Region = pkgconfig.Region
 
 // Region constants
@@ -326,4 +326,3 @@ type defaultLogger struct {
 func (l *defaultLogger) Printf(format string, v ...any) {
 	l.logger.Printf(format, v...)
 }
-

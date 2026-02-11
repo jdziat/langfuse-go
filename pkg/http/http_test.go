@@ -29,7 +29,7 @@ func (e *mockRetryAfterError) Error() string {
 	return "mock retry after error"
 }
 
-func (e *mockRetryAfterError) RetryAfter() time.Duration {
+func (e *mockRetryAfterError) SuggestedRetryAfter() time.Duration {
 	return e.retryAfter
 }
 

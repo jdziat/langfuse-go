@@ -111,6 +111,13 @@ func (e *APIError) IsRetryable() bool {
 	return e.IsRateLimited() || e.IsServerError()
 }
 
+// SuggestedRetryAfter returns the suggested retry delay from the Retry-After header.
+// This method implements the pkghttp.RetryAfterError interface.
+// Note: The method is named SuggestedRetryAfter to avoid conflict with the RetryAfter field.
+func (e *APIError) SuggestedRetryAfter() time.Duration {
+	return e.RetryAfter
+}
+
 // Code returns the error code for the API error.
 // Implements the LangfuseError interface.
 func (e *APIError) Code() ErrorCode {
