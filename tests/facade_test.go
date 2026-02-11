@@ -7,7 +7,6 @@ import (
 	pkgconfig "github.com/jdziat/langfuse-go/pkg/config"
 	pkgerrors "github.com/jdziat/langfuse-go/pkg/errors"
 	pkghttp "github.com/jdziat/langfuse-go/pkg/http"
-	pkgingestion "github.com/jdziat/langfuse-go/pkg/ingestion"
 )
 
 // TestFacadeTypeAliases verifies that facade type aliases work correctly.
@@ -26,22 +25,22 @@ func TestFacadeTypeAliases(t *testing.T) {
 	})
 
 	t.Run("pkg/errors type aliases", func(t *testing.T) {
-		// Test type compatibility
-		var asyncErr *langfuse.PkgAsyncError
+		// Test type compatibility - regular (non-Pkg-prefixed) types
+		var asyncErr *langfuse.AsyncError
 		var pkgAsyncErr *pkgerrors.AsyncError
 		asyncErr = pkgAsyncErr
 		if asyncErr == nil {
 			// This is just to use the variable
 		}
 
-		var apiErr *langfuse.PkgAPIError
+		var apiErr *langfuse.APIError
 		var pkgAPIErr *pkgerrors.APIError
 		apiErr = pkgAPIErr
 		if apiErr == nil {
 			// This is just to use the variable
 		}
 
-		var valErr *langfuse.PkgValidationError
+		var valErr *langfuse.ValidationError
 		var pkgValErr *pkgerrors.ValidationError
 		valErr = pkgValErr
 		if valErr == nil {
@@ -51,14 +50,14 @@ func TestFacadeTypeAliases(t *testing.T) {
 
 	t.Run("pkg/http type aliases", func(t *testing.T) {
 		// Test type compatibility
-		var backoff *langfuse.PkgExponentialBackoff
+		var backoff *langfuse.ExponentialBackoff
 		var pkgBackoff *pkghttp.ExponentialBackoff
 		backoff = pkgBackoff
 		if backoff == nil {
 			// This is just to use the variable
 		}
 
-		var cb *langfuse.PkgCircuitBreaker
+		var cb *langfuse.CircuitBreaker
 		var pkgCB *pkghttp.CircuitBreaker
 		cb = pkgCB
 		if cb == nil {
@@ -66,58 +65,39 @@ func TestFacadeTypeAliases(t *testing.T) {
 		}
 	})
 
-	t.Run("pkg/ingestion type aliases", func(t *testing.T) {
-		// Test type compatibility
-		var monitor *langfuse.PkgQueueMonitor
-		var pkgMonitor *pkgingestion.QueueMonitor
-		monitor = pkgMonitor
-		if monitor == nil {
-			// This is just to use the variable
-		}
-
-		var handler *langfuse.PkgBackpressureHandler
-		var pkgHandler *pkgingestion.BackpressureHandler
-		handler = pkgHandler
-		if handler == nil {
-			// This is just to use the variable
-		}
-	})
-
 	t.Run("constructor functions", func(t *testing.T) {
 		// Test that constructor functions are accessible
-		if langfuse.NewPkgExponentialBackoff == nil {
-			t.Error("NewPkgExponentialBackoff should be exported")
+		if langfuse.NewExponentialBackoff == nil {
+			t.Error("NewExponentialBackoff should be exported")
 		}
-		if langfuse.NewPkgCircuitBreaker == nil {
-			t.Error("NewPkgCircuitBreaker should be exported")
+		if langfuse.NewCircuitBreaker == nil {
+			t.Error("NewCircuitBreaker should be exported")
 		}
-		if langfuse.NewPkgQueueMonitor == nil {
-			t.Error("NewPkgQueueMonitor should be exported")
+		if langfuse.NewValidationError == nil {
+			t.Error("NewValidationError should be exported")
 		}
-		if langfuse.NewPkgBackpressureHandler == nil {
-			t.Error("NewPkgBackpressureHandler should be exported")
-		}
-		if langfuse.PkgUUID == nil {
-			t.Error("PkgUUID should be exported")
-		}
-		if langfuse.PkgGenerateID == nil {
-			t.Error("PkgGenerateID should be exported")
+		if langfuse.NewAsyncError == nil {
+			t.Error("NewAsyncError should be exported")
 		}
 	})
 
-	t.Run("helper functions", func(t *testing.T) {
-		// Test that helper functions are accessible
-		if langfuse.PkgIsRetryable == nil {
-			t.Error("PkgIsRetryable should be exported")
+	t.Run("error helper functions", func(t *testing.T) {
+		// Test that error helper functions work by calling them
+		// IsRetryable should return false for nil error
+		if langfuse.IsRetryable(nil) {
+			t.Error("IsRetryable(nil) should return false")
 		}
-		if langfuse.PkgAsAPIError == nil {
-			t.Error("PkgAsAPIError should be exported")
+
+		// AsAPIError should return nil, false for nil error
+		apiErr, ok := langfuse.AsAPIError(nil)
+		if ok || apiErr != nil {
+			t.Error("AsAPIError(nil) should return nil, false")
 		}
-		if langfuse.PkgWrapError == nil {
-			t.Error("PkgWrapError should be exported")
-		}
-		if langfuse.PkgWrapErrorf == nil {
-			t.Error("PkgWrapErrorf should be exported")
+
+		// AsValidationError should return nil, false for nil error
+		valErr, ok := langfuse.AsValidationError(nil)
+		if ok || valErr != nil {
+			t.Error("AsValidationError(nil) should return nil, false")
 		}
 	})
 }
@@ -126,7 +106,7 @@ func TestFacadeTypeAliases(t *testing.T) {
 func TestFacadeUsageExample(t *testing.T) {
 	t.Run("use pkg types via facade", func(t *testing.T) {
 		// Create a circuit breaker using the facade
-		cb := langfuse.NewPkgCircuitBreaker(pkghttp.CircuitBreakerConfig{
+		cb := langfuse.NewCircuitBreaker(pkghttp.CircuitBreakerConfig{
 			FailureThreshold: 3,
 		})
 
@@ -135,13 +115,16 @@ func TestFacadeUsageExample(t *testing.T) {
 		}
 
 		// Create a retry strategy using the facade
-		backoff := langfuse.NewPkgExponentialBackoff()
+		backoff := langfuse.NewExponentialBackoff()
 		if backoff == nil {
 			t.Error("expected non-nil backoff")
 		}
 
 		// Generate an ID using the facade
-		id := langfuse.PkgGenerateID()
+		id, err := langfuse.GenerateID()
+		if err != nil {
+			t.Errorf("GenerateID failed: %v", err)
+		}
 		if id == "" {
 			t.Error("expected non-empty ID")
 		}
@@ -154,14 +137,14 @@ func TestFacadeUsageExample(t *testing.T) {
 	})
 
 	t.Run("use pkg error helpers via facade", func(t *testing.T) {
-		// Create a validation error using pkg
-		err := langfuse.NewPkgValidationError("field", "invalid value")
+		// Create a validation error using the facade
+		err := langfuse.NewValidationError("field", "invalid value")
 		if err == nil {
 			t.Fatal("expected non-nil error")
 		}
 
 		// Extract it using the facade helper
-		valErr, ok := langfuse.PkgAsValidationError(err)
+		valErr, ok := langfuse.AsValidationError(err)
 		if !ok {
 			t.Error("expected to extract validation error")
 		}
@@ -170,12 +153,12 @@ func TestFacadeUsageExample(t *testing.T) {
 		}
 
 		// Test retryability
-		if langfuse.PkgIsRetryable(err) {
+		if langfuse.IsRetryable(err) {
 			t.Error("validation errors should not be retryable")
 		}
 
 		// Test error code
-		code := langfuse.PkgErrorCodeOf(err)
+		code := langfuse.ErrorCodeOf(err)
 		if code != pkgerrors.ErrCodeValidation {
 			t.Errorf("expected ErrCodeValidation, got %v", code)
 		}

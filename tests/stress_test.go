@@ -152,7 +152,7 @@ func TestHighThroughputWithBackpressure(t *testing.T) {
 		langfuse.WithTimeout(10*time.Second),
 		langfuse.WithShutdownTimeout(30*time.Second),
 		langfuse.WithBatchQueueSize(100),
-		langfuse.WithOnBackpressure(func(state langfuse.PkgQueueState) {
+		langfuse.WithOnBackpressure(func(state langfuse.QueueState) {
 			backpressureCallbackCount.Add(1)
 		}),
 	)

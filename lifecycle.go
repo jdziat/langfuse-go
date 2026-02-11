@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	pkgclient "github.com/jdziat/langfuse-go/pkg/client"
 	pkgingestion "github.com/jdziat/langfuse-go/pkg/ingestion"
 	pkglifecycle "github.com/jdziat/langfuse-go/pkg/lifecycle"
 )
@@ -511,10 +512,10 @@ var ErrBackpressure = &APIError{
 // queueEvent is a wrapper that converts root's ingestionEvent to pkgclient.IngestionEvent.
 func (c *Client) queueEvent(ctx context.Context, event ingestionEvent) error {
 	// Convert root ingestionEvent to pkgclient.IngestionEvent
-	pkgEvent := PkgClientIngestionEvent{
+	pkgEvent := pkgclient.IngestionEvent{
 		ID:        event.ID,
 		Type:      event.Type,
-		Timestamp: PkgTime{Time: event.Timestamp.Time},
+		Timestamp: pkgclient.Time{Time: event.Timestamp.Time},
 		Body:      event.Body,
 	}
 	return c.Client.QueueEvent(ctx, pkgEvent)
