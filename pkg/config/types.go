@@ -72,6 +72,10 @@ const (
 	// DefaultBackgroundSendTimeout is the timeout for background batch sends.
 	DefaultBackgroundSendTimeout = 30 * time.Second
 
+	// DefaultMaxBackgroundSenders is the default max concurrent background senders.
+	// This limits goroutine creation when the batch queue is full.
+	DefaultMaxBackgroundSenders = 10
+
 	// MaxBatchSize is the maximum allowed batch size.
 	MaxBatchSize = 10000
 

@@ -1,7 +1,6 @@
 package client
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -38,6 +37,7 @@ const (
 	DefaultShutdownTimeout       = pkgconfig.DefaultShutdownTimeout
 	DefaultBatchQueueSize        = pkgconfig.DefaultBatchQueueSize
 	DefaultBackgroundSendTimeout = pkgconfig.DefaultBackgroundSendTimeout
+	DefaultMaxBackgroundSenders  = pkgconfig.DefaultMaxBackgroundSenders
 	MaxBatchSize                 = pkgconfig.MaxBatchSize
 	MaxMaxRetries                = pkgconfig.MaxMaxRetries
 	MaxTimeout                   = pkgconfig.MaxTimeout
@@ -69,17 +69,12 @@ type Metrics interface {
 }
 
 // HTTPHook allows customizing HTTP request/response handling.
-type HTTPHook interface {
-	BeforeRequest(ctx context.Context, req *http.Request) error
-	AfterResponse(ctx context.Context, req *http.Request, resp *http.Response, duration time.Duration, err error)
-}
+// This is an alias to pkghttp.HTTPHook for type compatibility.
+type HTTPHook = pkghttp.HTTPHook
 
 // ClassifiedHook wraps an HTTPHook with priority information.
-type ClassifiedHook struct {
-	Hook     HTTPHook
-	Priority int
-	Name     string
-}
+// This is an alias to pkghttp.ClassifiedHook for type compatibility.
+type ClassifiedHook = pkghttp.ClassifiedHook
 
 // Config holds the configuration for the Langfuse client.
 type Config struct {
@@ -175,6 +170,10 @@ type Config struct {
 
 	// DropOnQueueFull drops events when queue is at overflow.
 	DropOnQueueFull bool
+
+	// MaxBackgroundSenders limits concurrent background batch senders.
+	// Prevents unbounded goroutine creation under sustained load. Default is 10.
+	MaxBackgroundSenders int
 }
 
 // IDGenerationMode controls how IDs are generated.
@@ -239,6 +238,10 @@ func (c *Config) ApplyDefaults() {
 		c.BatchQueueSize = DefaultBatchQueueSize
 	}
 
+	if c.MaxBackgroundSenders == 0 {
+		c.MaxBackgroundSenders = DefaultMaxBackgroundSenders
+	}
+
 	if c.Debug && c.Logger == nil {
 		c.Logger = &defaultLogger{
 			logger: log.New(os.Stderr, "langfuse: ", log.LstdFlags),
@@ -295,6 +298,16 @@ func (c *Config) Validate() error {
 	}
 	if c.BatchQueueSize < 1 {
 		return fmt.Errorf("langfuse: batch queue size must be at least 1")
+	}
+
+	// Validate backpressure options are mutually exclusive
+	if c.BlockOnQueueFull && c.DropOnQueueFull {
+		return fmt.Errorf("langfuse: BlockOnQueueFull and DropOnQueueFull are mutually exclusive; set only one")
+	}
+
+	// Validate MaxBackgroundSenders is non-negative
+	if c.MaxBackgroundSenders < 0 {
+		return fmt.Errorf("langfuse: MaxBackgroundSenders cannot be negative, got %d", c.MaxBackgroundSenders)
 	}
 
 	return nil

@@ -470,6 +470,9 @@ type testLogger struct {
 	messages []string
 }
 
+// Compile-time interface assertions
+var _ Logger = (*testLogger)(nil)
+
 func (l *testLogger) Printf(format string, v ...any) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -489,6 +492,9 @@ type testStructuredLogger struct {
 	debugs []string
 	infos  []string
 }
+
+// Compile-time interface assertion
+var _ StructuredLogger = (*testStructuredLogger)(nil)
 
 func (l *testStructuredLogger) Debug(msg string, args ...any) {
 	l.mu.Lock()
@@ -637,6 +643,9 @@ type testMetrics struct {
 	counters map[string]int64
 	gauges   map[string]float64
 }
+
+// Compile-time interface assertion
+var _ Metrics = (*testMetrics)(nil)
 
 func (m *testMetrics) IncrementCounter(name string, value int64) {
 	m.mu.Lock()

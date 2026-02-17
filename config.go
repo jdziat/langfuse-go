@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	pkgclient "github.com/jdziat/langfuse-go/pkg/client"
 	pkgconfig "github.com/jdziat/langfuse-go/pkg/config"
 )
 
@@ -93,6 +94,9 @@ const (
 
 	// DefaultBackgroundSendTimeout is the timeout for background batch sends.
 	DefaultBackgroundSendTimeout = pkgconfig.DefaultBackgroundSendTimeout
+
+	// DefaultMaxBackgroundSenders is the default max concurrent background senders.
+	DefaultMaxBackgroundSenders = pkgconfig.DefaultMaxBackgroundSenders
 
 	// MaxBatchSize is the maximum allowed batch size.
 	MaxBatchSize = pkgconfig.MaxBatchSize
@@ -257,6 +261,11 @@ type Config struct {
 	// Only applies if BlockOnQueueFull is false. Default is false (queue events anyway).
 	DropOnQueueFull bool
 
+	// MaxBackgroundSenders limits the number of concurrent goroutines used for
+	// background batch sending when the queue is full. This prevents unbounded
+	// goroutine creation under sustained high load. Default is 10.
+	MaxBackgroundSenders int
+
 	// StrictValidation enables strict validation mode with validated builders.
 	// When enabled, NewTraceStrict(), NewSpanStrict(), etc. methods become available.
 	// These return BuildResult types that force explicit error handling.
@@ -287,25 +296,8 @@ func (c *Config) String() string {
 }
 
 // BatchResult contains information about a flushed batch.
-type BatchResult struct {
-	// EventCount is the number of events in the batch.
-	EventCount int
-
-	// Success indicates whether the batch was sent successfully.
-	Success bool
-
-	// Error is the error that occurred, if any.
-	Error error
-
-	// Duration is how long the batch send took.
-	Duration time.Duration
-
-	// Successes is the number of successfully ingested events.
-	Successes int
-
-	// Errors is the number of events that failed to ingest.
-	Errors int
-}
+// It is an alias to pkgclient.BatchResult for type compatibility.
+type BatchResult = pkgclient.BatchResult
 
 // applyDefaults sets default values for unset configuration options.
 func (c *Config) applyDefaults() {
@@ -313,8 +305,8 @@ func (c *Config) applyDefaults() {
 		if c.Region == "" {
 			c.Region = RegionEU
 		}
-		if url, ok := regionBaseURLs[c.Region]; ok {
-			c.BaseURL = url
+		if baseURL, ok := regionBaseURLs[c.Region]; ok {
+			c.BaseURL = baseURL
 		}
 	}
 
@@ -356,6 +348,10 @@ func (c *Config) applyDefaults() {
 
 	if c.BatchQueueSize == 0 {
 		c.BatchQueueSize = DefaultBatchQueueSize
+	}
+
+	if c.MaxBackgroundSenders == 0 {
+		c.MaxBackgroundSenders = DefaultMaxBackgroundSenders
 	}
 
 	// Set default logger if debug is enabled and no logger is set
@@ -448,6 +444,16 @@ func (c *Config) validate() error {
 	if c.ShutdownTimeout < c.Timeout {
 		return fmt.Errorf("langfuse: shutdown timeout (%v) should be >= request timeout (%v) to allow pending requests to complete",
 			c.ShutdownTimeout, c.Timeout)
+	}
+
+	// Validate backpressure options are mutually exclusive
+	if c.BlockOnQueueFull && c.DropOnQueueFull {
+		return fmt.Errorf("langfuse: BlockOnQueueFull and DropOnQueueFull are mutually exclusive; set only one")
+	}
+
+	// Validate MaxBackgroundSenders is non-negative
+	if c.MaxBackgroundSenders < 0 {
+		return fmt.Errorf("langfuse: MaxBackgroundSenders cannot be negative, got %d", c.MaxBackgroundSenders)
 	}
 
 	return nil
@@ -578,10 +584,7 @@ func NewFromEnv(opts ...ConfigOption) (*Client, error) {
 //	client, _ := langfuse.New(pk, sk,
 //	    langfuse.WithStructuredLogger(langfuse.WrapPrintfLogger(log.Default())),
 //	)
-type Logger interface {
-	// Printf logs a formatted message.
-	Printf(format string, v ...any)
-}
+type Logger = pkgclient.Logger
 
 // StructuredLogger provides structured logging support for the SDK.
 // This is the preferred logging interface and is compatible with Go 1.21's
@@ -598,16 +601,7 @@ type Logger interface {
 //	client, _ := langfuse.New(pk, sk,
 //	    langfuse.WithStructuredLogger(langfuse.WrapPrintfLogger(log.Default())),
 //	)
-type StructuredLogger interface {
-	// Debug logs a debug-level message with optional key-value pairs.
-	Debug(msg string, args ...any)
-	// Info logs an info-level message with optional key-value pairs.
-	Info(msg string, args ...any)
-	// Warn logs a warning-level message with optional key-value pairs.
-	Warn(msg string, args ...any)
-	// Error logs an error-level message with optional key-value pairs.
-	Error(msg string, args ...any)
-}
+type StructuredLogger = pkgclient.StructuredLogger
 
 // printfLoggerWrapper wraps a printf-style logger to implement StructuredLogger.
 type printfLoggerWrapper struct {
@@ -659,14 +653,7 @@ func (w *printfLoggerWrapper) Error(msg string, args ...any) {
 var _ StructuredLogger = (*printfLoggerWrapper)(nil)
 
 // Metrics is an optional interface for SDK telemetry.
-type Metrics interface {
-	// IncrementCounter increments a counter metric.
-	IncrementCounter(name string, value int64)
-	// RecordDuration records a duration metric.
-	RecordDuration(name string, duration time.Duration)
-	// SetGauge sets a gauge metric.
-	SetGauge(name string, value float64)
-}
+type Metrics = pkgclient.Metrics
 
 // defaultLogger wraps the standard library logger.
 type defaultLogger struct {
@@ -853,9 +840,9 @@ func (a *SlogAdapter) Error(msg string, args ...any) {
 }
 
 // Printf implements Logger.Printf for backward compatibility.
-// Logs at Info level.
+// Logs at Info level with the formatted message.
 func (a *SlogAdapter) Printf(format string, v ...any) {
-	a.logger.Info(format, v...)
+	a.logger.Info(fmt.Sprintf(format, v...))
 }
 
 // WithContext returns a new SlogAdapter that uses a logger with the given context.

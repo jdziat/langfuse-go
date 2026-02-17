@@ -500,10 +500,13 @@ type (
 // ============================================================================
 
 // ErrBackpressure is returned when an event is rejected due to backpressure.
-var ErrBackpressure = &APIError{
-	StatusCode: 503,
-	Message:    "event rejected due to queue backpressure",
-}
+// Re-exported from pkg/client for consistent error comparisons with errors.Is().
+var ErrBackpressure = pkgclient.ErrBackpressure
+
+// ErrBatchDropped is returned when a batch is dropped because all background
+// sender slots are occupied and the batch queue is full.
+// Re-exported from pkg/client for consistent error comparisons with errors.Is().
+var ErrBatchDropped = pkgclient.ErrBatchDropped
 
 // Note: Most batch processing methods (batchProcessor, processBatchRequest, sendBatch,
 // waitForQueueSpace, estimateQueueSize, addEventToQueue, handleQueueFull)

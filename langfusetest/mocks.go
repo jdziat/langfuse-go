@@ -3,6 +3,15 @@ package langfusetest
 import (
 	"sync"
 	"time"
+
+	langfuse "github.com/jdziat/langfuse-go"
+)
+
+// Compile-time interface assertions to catch drift between mock implementations
+// and the actual interfaces they're supposed to implement.
+var (
+	_ langfuse.Metrics = (*MockMetrics)(nil)
+	_ langfuse.Logger  = (*MockLogger)(nil)
 )
 
 // MockMetrics is a mock implementation of the Metrics interface for testing.

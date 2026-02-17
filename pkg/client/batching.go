@@ -47,6 +47,13 @@ var ErrBackpressure = &pkgerrors.APIError{
 	Message:    "event rejected due to queue backpressure",
 }
 
+// ErrBatchDropped is returned when a batch is dropped because all background
+// sender slots are occupied and the batch queue is full.
+var ErrBatchDropped = &pkgerrors.APIError{
+	StatusCode: 503,
+	Message:    "batch dropped: background sender limit reached",
+}
+
 // batchProcessor processes batch requests from the queue.
 // It handles graceful shutdown by listening for drainSignal and processing
 // all remaining events before signaling completion via drainComplete.
@@ -103,10 +110,17 @@ func (c *Client) processBatchRequest(req batchRequest) {
 }
 
 // sendBatch sends a batch of events to the API.
+// Always signals space availability on return (via defer) since the batch was
+// removed from the queue regardless of send success or failure.
 func (c *Client) sendBatch(ctx context.Context, events []IngestionEvent) error {
 	if len(events) == 0 {
 		return nil
 	}
+
+	// Always signal space availability when done - the batch was already removed
+	// from the queue, so space IS available regardless of send success/failure.
+	// This prevents waiters from blocking unnecessarily on persistent errors.
+	defer c.signalSpaceAvailable()
 
 	start := time.Now()
 	req := &IngestionRequest{
@@ -152,6 +166,25 @@ func (c *Client) sendBatch(ctx context.Context, events []IngestionEvent) error {
 	}
 
 	return nil
+}
+
+// signalSpaceAvailable broadcasts to ALL waiters that queue space may be available.
+// Uses close-and-recreate pattern: closing the channel wakes all waiters simultaneously.
+// This prevents signal starvation where only one waiter would wake per signal.
+func (c *Client) signalSpaceAvailable() {
+	c.spaceAvailableMu.Lock()
+	close(c.spaceAvailableCh)                // Wake ALL waiters
+	c.spaceAvailableCh = make(chan struct{}) // Create new channel for future waiters
+	c.spaceAvailableMu.Unlock()
+}
+
+// getSpaceAvailableCh returns the current space-available channel under lock.
+// Callers should wait on the returned channel, which will be closed when space is available.
+func (c *Client) getSpaceAvailableCh() chan struct{} {
+	c.spaceAvailableMu.Lock()
+	ch := c.spaceAvailableCh
+	c.spaceAvailableMu.Unlock()
+	return ch
 }
 
 // flushLoop periodically flushes pending events.
@@ -218,7 +251,10 @@ func (c *Client) QueueEvent(ctx context.Context, event IngestionEvent) error {
 			// Successfully queued
 		default:
 			// Queue is full, spawn tracked goroutine
-			c.handleQueueFull(ctx, events)
+			// Return error if batch was dropped so caller knows about data loss
+			if err := c.handleQueueFull(events); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -226,23 +262,26 @@ func (c *Client) QueueEvent(ctx context.Context, event IngestionEvent) error {
 }
 
 // waitForQueueSpace blocks until queue space is available or context is cancelled.
+// Uses broadcast signaling (close-and-recreate pattern) to wake ALL waiters when space
+// becomes available, preventing signal starvation.
 func (c *Client) waitForQueueSpace(ctx context.Context) error {
-	ticker := time.NewTicker(10 * time.Millisecond)
-	defer ticker.Stop()
-
 	for {
+		// Get current channel - will be closed when space is available
+		spaceCh := c.getSpaceAvailableCh()
+
 		select {
 		case <-ctx.Done():
 			return ErrBackpressure
 		case <-c.ctx.Done():
 			return ErrClientClosed
-		case <-ticker.C:
-			// Check if queue has space now
+		case <-spaceCh:
+			// Space may be available - check backpressure decision
 			if c.backpressure != nil {
 				currentQueueSize := c.estimateQueueSize()
 				if c.backpressure.Decide(currentQueueSize) != DecisionBlock {
 					return nil
 				}
+				// Still at overflow, wait for next signal
 			} else {
 				return nil
 			}
@@ -250,14 +289,25 @@ func (c *Client) waitForQueueSpace(ctx context.Context) error {
 	}
 }
 
-// estimateQueueSize returns an estimate of the current queue size.
-// This is thread-safe and provides a point-in-time estimate.
+// estimateQueueSize returns an approximate estimate of the current queue size.
+//
+// DESIGN NOTE: This intentionally provides an approximation rather than an exact count.
+// The mutex is released before reading the batch queue length, creating a brief window
+// where events could move between pendingEvents and batchQueue. This is acceptable because:
+//
+//  1. Backpressure decisions don't require exact counts - approximate values are sufficient
+//     for determining if we're near capacity thresholds (50%, 80%, 95%).
+//  2. Holding the mutex while reading the channel length could cause contention with
+//     the batch processor goroutine, degrading throughput under load.
+//  3. The estimate errs on the side of overestimating (counting events in both places
+//     during the transition), which is the safer direction for backpressure.
+//
+// For exact queue metrics, use the Stats() method which provides a consistent snapshot.
 func (c *Client) estimateQueueSize() int {
 	c.mu.Lock()
 	pendingCount := len(c.pendingEvents)
 	c.mu.Unlock()
 
-	// Estimate batch queue contribution
 	// len() on channels is safe for concurrent access in Go
 	batchQueueCount := len(c.batchQueue) * c.config.BatchSize
 
@@ -292,23 +342,44 @@ func (c *Client) addEventToQueue(event IngestionEvent) ([]IngestionEvent, error)
 
 // handleQueueFull handles the case when the batch queue is full.
 // It spawns a tracked goroutine with its own timeout context to send the batch.
-func (c *Client) handleQueueFull(ctx context.Context, events []IngestionEvent) {
-	c.log("batch queue full, sending in background goroutine")
+// The number of concurrent background senders is limited by MaxBackgroundSenders
+// to prevent unbounded goroutine creation under sustained high load.
+//
+// Returns ErrBatchDropped if all background sender slots are occupied.
+// The error is returned so callers can be informed of data loss.
+func (c *Client) handleQueueFull(events []IngestionEvent) error {
+	// Try to acquire the semaphore without blocking
+	select {
+	case c.backgroundSendSem <- struct{}{}:
+		// Acquired semaphore slot, proceed with background send
+		c.log("batch queue full, sending in background goroutine")
 
-	// Track the goroutine to ensure graceful shutdown
-	c.wg.Add(1)
-	go func() {
-		defer c.wg.Done()
+		c.wg.Add(1)
+		go func() {
+			defer func() { <-c.backgroundSendSem }() // Release semaphore
+			defer c.wg.Done()
 
-		// Use a timeout context that inherits from the provided context
-		// but has a maximum timeout to ensure completion
-		sendCtx, cancel := context.WithTimeout(ctx, DefaultBackgroundSendTimeout)
-		defer cancel()
+			// Use context.Background() - NOT the user's context.
+			// Once the batch is accepted for background sending, user cancellation
+			// should not affect it. The batch was already removed from pendingEvents.
+			sendCtx, cancel := context.WithTimeout(context.Background(), DefaultBackgroundSendTimeout)
+			defer cancel()
 
-		if err := c.sendBatch(sendCtx, events); err != nil {
-			c.handleError(err)
+			if err := c.sendBatch(sendCtx, events); err != nil {
+				c.handleError(err)
+			}
+		}()
+		return nil
+	default:
+		// Semaphore full - all background sender slots are in use
+		c.logError("background sender limit reached (%d), dropping batch of %d events",
+			c.config.MaxBackgroundSenders, len(events))
+
+		if c.config.Metrics != nil {
+			c.config.Metrics.IncrementCounter("langfuse.batches_dropped", 1)
 		}
-	}()
+		return ErrBatchDropped
+	}
 }
 
 // Flush sends all pending events to the Langfuse API.

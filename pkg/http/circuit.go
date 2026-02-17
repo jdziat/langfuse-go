@@ -34,7 +34,7 @@ func (s CircuitState) String() string {
 }
 
 // ErrCircuitOpen is returned when the circuit breaker is open and blocking requests.
-var ErrCircuitOpen = errors.New("circuit breaker is open")
+var ErrCircuitOpen = errors.New("langfuse: circuit breaker is open")
 
 // CircuitBreakerConfig configures the circuit breaker behavior.
 type CircuitBreakerConfig struct {

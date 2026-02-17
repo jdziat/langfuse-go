@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 	"sync"
-	"time"
 
 	pkgid "github.com/jdziat/langfuse-go/pkg/id"
 	pkgingestion "github.com/jdziat/langfuse-go/pkg/ingestion"
@@ -45,6 +44,14 @@ type Client struct {
 
 	// Backpressure management
 	backpressure *pkgingestion.BackpressureHandler
+
+	// Semaphore to limit concurrent background batch senders
+	backgroundSendSem chan struct{}
+
+	// Broadcast signaling for queue space availability (for waitForQueueSpace)
+	// Uses close-and-recreate pattern: closing the channel wakes ALL waiters
+	spaceAvailableMu sync.Mutex
+	spaceAvailableCh chan struct{}
 }
 
 // batchRequest represents a batch of events to be sent.
@@ -108,28 +115,30 @@ func NewWithConfig(cfg *Config) (*Client, error) {
 				Threshold:      pkgingestion.DefaultBackpressureThreshold(),
 				Capacity:       queueCapacity,
 				OnBackpressure: cfgCopy.OnBackpressure,
-				Metrics:        wrapMetrics(cfgCopy.Metrics),
-				Logger:         wrapLogger(cfgCopy.Logger),
+				Metrics:        cfgCopy.Metrics, // Go structural typing: Metrics satisfies pkgingestion.Metrics
+				Logger:         cfgCopy.Logger,  // Go structural typing: Logger is identical
 			}),
 			BlockOnFull: cfgCopy.BlockOnQueueFull,
 			DropOnFull:  cfgCopy.DropOnQueueFull,
-			Logger:      wrapLogger(cfgCopy.Logger),
+			Logger:      cfgCopy.Logger,
 		})
 	}
 
 	c := &Client{
-		config:        &cfgCopy,
-		http:          httpClient,
-		lifecycle:     lifecycle,
-		idGenerator:   idGenerator,
-		pendingEvents: make([]IngestionEvent, 0, cfgCopy.BatchSize),
-		ctx:           ctx,
-		cancel:        cancel,
-		batchQueue:    make(chan batchRequest, cfgCopy.BatchQueueSize),
-		stopFlush:     make(chan struct{}),
-		drainSignal:   make(chan struct{}),
-		drainComplete: make(chan struct{}),
-		backpressure:  backpressureHandler,
+		config:            &cfgCopy,
+		http:              httpClient,
+		lifecycle:         lifecycle,
+		idGenerator:       idGenerator,
+		pendingEvents:     make([]IngestionEvent, 0, cfgCopy.BatchSize),
+		ctx:               ctx,
+		cancel:            cancel,
+		batchQueue:        make(chan batchRequest, cfgCopy.BatchQueueSize),
+		stopFlush:         make(chan struct{}),
+		drainSignal:       make(chan struct{}),
+		drainComplete:     make(chan struct{}),
+		backpressure:      backpressureHandler,
+		backgroundSendSem: make(chan struct{}, cfgCopy.MaxBackgroundSenders),
+		spaceAvailableCh:  make(chan struct{}), // Unbuffered - will be closed to broadcast
 	}
 
 	// Start background batch processor
@@ -232,42 +241,7 @@ func (c *Client) HTTP() Doer {
 	return c.http
 }
 
-// wrapMetrics converts our Metrics interface to pkg/ingestion's interface.
-func wrapMetrics(m Metrics) pkgingestion.Metrics {
-	if m == nil {
-		return nil
-	}
-	return &metricsWrapper{m: m}
-}
-
-type metricsWrapper struct {
-	m Metrics
-}
-
-func (w *metricsWrapper) IncrementCounter(name string, value int64) {
-	w.m.IncrementCounter(name, value)
-}
-
-func (w *metricsWrapper) RecordDuration(name string, duration time.Duration) {
-	w.m.RecordDuration(name, duration)
-}
-
-func (w *metricsWrapper) SetGauge(name string, value float64) {
-	w.m.SetGauge(name, value)
-}
-
-// wrapLogger converts our Logger interface to pkg/ingestion's interface.
-func wrapLogger(l Logger) pkgingestion.Logger {
-	if l == nil {
-		return nil
-	}
-	return &loggerWrapper{l: l}
-}
-
-type loggerWrapper struct {
-	l Logger
-}
-
-func (w *loggerWrapper) Printf(format string, v ...any) {
-	w.l.Printf(format, v...)
-}
+// Note: No wrappers needed for Logger and Metrics.
+// pkgclient.Logger is structurally identical to pkgingestion.Logger.
+// pkgclient.Metrics is a superset of pkgingestion.Metrics (has RecordDuration).
+// Go's structural typing means any pkgclient.Metrics automatically satisfies pkgingestion.Metrics.

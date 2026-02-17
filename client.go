@@ -2,7 +2,6 @@ package langfuse
 
 import (
 	"context"
-	"errors"
 	"log"
 	"net/http"
 	"net/url"
@@ -134,24 +133,22 @@ func convertToPkgClientConfig(cfg *Config) *pkgclient.Config {
 		ShutdownTimeout:     cfg.ShutdownTimeout,
 		BatchQueueSize:      cfg.BatchQueueSize,
 		IdleWarningDuration: cfg.IdleWarningDuration,
-		IDGenerationMode:    pkgclient.IDGenerationMode(cfg.IDGenerationMode),
-		BlockOnQueueFull:    cfg.BlockOnQueueFull,
-		DropOnQueueFull:     cfg.DropOnQueueFull,
+		IDGenerationMode:     pkgclient.IDGenerationMode(cfg.IDGenerationMode),
+		BlockOnQueueFull:     cfg.BlockOnQueueFull,
+		DropOnQueueFull:      cfg.DropOnQueueFull,
+		MaxBackgroundSenders: cfg.MaxBackgroundSenders,
 	}
 
-	// Convert Logger interface
+	// Logger, StructuredLogger, and Metrics are type aliases to pkgclient versions,
+	// so they can be assigned directly without wrappers.
 	if cfg.Logger != nil {
 		pkgCfg.Logger = cfg.Logger
 	}
-
-	// Convert StructuredLogger interface
 	if cfg.StructuredLogger != nil {
-		pkgCfg.StructuredLogger = &structuredLoggerWrapper{cfg.StructuredLogger}
+		pkgCfg.StructuredLogger = cfg.StructuredLogger
 	}
-
-	// Convert Metrics interface
 	if cfg.Metrics != nil {
-		pkgCfg.Metrics = &metricsWrapper{cfg.Metrics}
+		pkgCfg.Metrics = cfg.Metrics
 	}
 
 	// Convert RetryStrategy
@@ -164,27 +161,15 @@ func convertToPkgClientConfig(cfg *Config) *pkgclient.Config {
 		pkgCfg.CircuitBreaker = cfg.CircuitBreaker
 	}
 
-	// Convert OnBatchFlushed callback
+	// OnBatchFlushed can be assigned directly since BatchResult is an alias.
 	if cfg.OnBatchFlushed != nil {
-		pkgCfg.OnBatchFlushed = func(result pkgclient.BatchResult) {
-			cfg.OnBatchFlushed(BatchResult{
-				EventCount: result.EventCount,
-				Success:    result.Success,
-				Error:      result.Error,
-				Duration:   result.Duration,
-				Successes:  result.Successes,
-				Errors:     result.Errors,
-			})
-		}
+		pkgCfg.OnBatchFlushed = cfg.OnBatchFlushed
 	}
 
-	// Convert HTTP hooks
+	// HTTPHooks can be assigned directly since both root HTTPHook and pkgclient.HTTPHook
+	// are aliases to pkghttp.HTTPHook - they're the same type.
 	if len(cfg.HTTPHooks) > 0 {
-		pkgHooks := make([]pkgclient.HTTPHook, len(cfg.HTTPHooks))
-		for i, hook := range cfg.HTTPHooks {
-			pkgHooks[i] = &httpHookWrapper{hook}
-		}
-		pkgCfg.HTTPHooks = pkgHooks
+		pkgCfg.HTTPHooks = cfg.HTTPHooks
 	}
 
 	// Convert BackpressureConfig
@@ -198,57 +183,6 @@ func convertToPkgClientConfig(cfg *Config) *pkgclient.Config {
 	}
 
 	return pkgCfg
-}
-
-// structuredLoggerWrapper wraps root StructuredLogger for pkg/client.
-type structuredLoggerWrapper struct {
-	logger StructuredLogger
-}
-
-func (w *structuredLoggerWrapper) Debug(msg string, args ...any) {
-	w.logger.Debug(msg, args...)
-}
-
-func (w *structuredLoggerWrapper) Info(msg string, args ...any) {
-	w.logger.Info(msg, args...)
-}
-
-func (w *structuredLoggerWrapper) Warn(msg string, args ...any) {
-	w.logger.Warn(msg, args...)
-}
-
-func (w *structuredLoggerWrapper) Error(msg string, args ...any) {
-	w.logger.Error(msg, args...)
-}
-
-// metricsWrapper wraps root Metrics for pkg/client.
-type metricsWrapper struct {
-	metrics Metrics
-}
-
-func (w *metricsWrapper) IncrementCounter(name string, value int64) {
-	w.metrics.IncrementCounter(name, value)
-}
-
-func (w *metricsWrapper) RecordDuration(name string, duration time.Duration) {
-	w.metrics.RecordDuration(name, duration)
-}
-
-func (w *metricsWrapper) SetGauge(name string, value float64) {
-	w.metrics.SetGauge(name, value)
-}
-
-// httpHookWrapper wraps root HTTPHook for pkg/client.
-type httpHookWrapper struct {
-	hook HTTPHook
-}
-
-func (w *httpHookWrapper) BeforeRequest(ctx context.Context, req *http.Request) error {
-	return w.hook.BeforeRequest(ctx, req)
-}
-
-func (w *httpHookWrapper) AfterResponse(ctx context.Context, req *http.Request, resp *http.Response, duration time.Duration, err error) {
-	w.hook.AfterResponse(ctx, req, resp, duration, err)
 }
 
 // handleError handles async errors for root-specific functionality.
@@ -700,7 +634,8 @@ const (
 )
 
 // ErrCircuitOpen is returned when the circuit breaker is open and blocking requests.
-var ErrCircuitOpen = errors.New("langfuse: circuit breaker is open")
+// Re-exported from pkg/http for consistent error comparisons with errors.Is().
+var ErrCircuitOpen = pkghttp.ErrCircuitOpen
 
 // CircuitBreakerConfig configures the circuit breaker behavior.
 type CircuitBreakerConfig = pkghttp.CircuitBreakerConfig

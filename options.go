@@ -428,6 +428,22 @@ func WithDropOnQueueFull(drop bool) ConfigOption {
 	}
 }
 
+// WithMaxBackgroundSenders sets the maximum number of concurrent goroutines
+// used for background batch sending when the queue is full.
+// This prevents unbounded goroutine creation under sustained high load.
+// Default is 10.
+//
+// Example:
+//
+//	client, _ := langfuse.New(pk, sk,
+//	    langfuse.WithMaxBackgroundSenders(20),
+//	)
+func WithMaxBackgroundSenders(n int) ConfigOption {
+	return func(c *Config) {
+		c.MaxBackgroundSenders = n
+	}
+}
+
 // WithStrictValidation enables strict validation mode.
 // When enabled, validated builders accumulate errors and force explicit
 // error handling via BuildResult types.

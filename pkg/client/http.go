@@ -24,6 +24,10 @@ var _ pkghttp.Doer = (*httpClient)(nil)
 const (
 	// maxResponseSize limits the size of HTTP response bodies to prevent OOM.
 	maxResponseSize = 10 * 1024 * 1024 // 10MB
+
+	// maxRequestBodySize limits the size of HTTP request bodies.
+	// This prevents accidentally sending extremely large batches.
+	maxRequestBodySize = 10 * 1024 * 1024 // 10MB
 )
 
 // httpClient handles HTTP requests to the Langfuse API.
@@ -138,6 +142,10 @@ func (h *httpClient) doOnce(ctx context.Context, req *request) error {
 		bodyBytes, err := json.Marshal(req.body)
 		if err != nil {
 			return fmt.Errorf("langfuse: failed to marshal request body: %w", err)
+		}
+		if len(bodyBytes) > maxRequestBodySize {
+			return fmt.Errorf("langfuse: request body size %d bytes exceeds maximum %d bytes",
+				len(bodyBytes), maxRequestBodySize)
 		}
 		bodyReader = bytes.NewReader(bodyBytes)
 	}

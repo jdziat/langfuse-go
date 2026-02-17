@@ -1,6 +1,7 @@
 package langfuse_test
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"testing"
@@ -315,5 +316,122 @@ func TestRegionConstants(t *testing.T) {
 				t.Errorf("Region %v = %q, want %q", tt.region, string(tt.region), tt.name)
 			}
 		})
+	}
+}
+
+// TestBackpressureOptionsMutualExclusivity tests that BlockOnQueueFull and
+// DropOnQueueFull cannot both be set to true.
+func TestBackpressureOptionsMutualExclusivity(t *testing.T) {
+	tests := []struct {
+		name             string
+		blockOnQueueFull bool
+		dropOnQueueFull  bool
+		wantErr          bool
+	}{
+		{
+			name:             "both false - valid",
+			blockOnQueueFull: false,
+			dropOnQueueFull:  false,
+			wantErr:          false,
+		},
+		{
+			name:             "block only - valid",
+			blockOnQueueFull: true,
+			dropOnQueueFull:  false,
+			wantErr:          false,
+		},
+		{
+			name:             "drop only - valid",
+			blockOnQueueFull: false,
+			dropOnQueueFull:  true,
+			wantErr:          false,
+		},
+		{
+			name:             "both true - invalid",
+			blockOnQueueFull: true,
+			dropOnQueueFull:  true,
+			wantErr:          true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client, err := langfuse.New(
+				"pk-lf-testpublickey123",
+				"sk-lf-testsecretkey123",
+				langfuse.WithBlockOnQueueFull(tt.blockOnQueueFull),
+				langfuse.WithDropOnQueueFull(tt.dropOnQueueFull),
+			)
+
+			if tt.wantErr && err == nil {
+				t.Error("expected error for mutually exclusive options, got nil")
+			}
+			if !tt.wantErr && err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			if tt.wantErr && err != nil {
+				if !strings.Contains(err.Error(), "mutually exclusive") {
+					t.Errorf("error should mention mutual exclusivity, got: %v", err)
+				}
+			}
+
+			// Clean up client if it was created
+			if client != nil {
+				client.Close(context.Background())
+			}
+		})
+	}
+}
+
+// TestWithMaxBackgroundSenders tests the MaxBackgroundSenders config option.
+func TestWithMaxBackgroundSenders(t *testing.T) {
+	cfg := &langfuse.Config{}
+
+	langfuse.WithMaxBackgroundSenders(20)(cfg)
+
+	if cfg.MaxBackgroundSenders != 20 {
+		t.Errorf("MaxBackgroundSenders = %v, want 20", cfg.MaxBackgroundSenders)
+	}
+}
+
+// TestMaxBackgroundSendersDefault tests that MaxBackgroundSenders has a default value.
+func TestMaxBackgroundSendersDefault(t *testing.T) {
+	client, err := langfuse.New(
+		"pk-lf-testpublickey123",
+		"sk-lf-testsecretkey123",
+	)
+	if err != nil {
+		t.Fatalf("failed to create client: %v", err)
+	}
+	defer client.Close(context.Background())
+
+	// The default is 10, but we can't directly access the internal config
+	// This test just ensures the client creates successfully with defaults
+}
+
+// TestMaxBackgroundSendersNegativeValidation tests that negative values are rejected.
+func TestMaxBackgroundSendersNegativeValidation(t *testing.T) {
+	_, err := langfuse.New(
+		"pk-lf-testpublickey123",
+		"sk-lf-testsecretkey123",
+		langfuse.WithMaxBackgroundSenders(-1),
+	)
+	if err == nil {
+		t.Error("expected error for negative MaxBackgroundSenders, got nil")
+	}
+	if err != nil && !strings.Contains(err.Error(), "cannot be negative") {
+		t.Errorf("error should mention negative value, got: %v", err)
+	}
+}
+
+// TestErrBatchDroppedExported tests that ErrBatchDropped is properly exported.
+func TestErrBatchDroppedExported(t *testing.T) {
+	// Verify the error is accessible and has expected properties
+	err := langfuse.ErrBatchDropped
+	if err == nil {
+		t.Fatal("ErrBatchDropped should not be nil")
+	}
+	if !strings.Contains(err.Error(), "batch dropped") {
+		t.Errorf("ErrBatchDropped.Error() = %q, want substring 'batch dropped'", err.Error())
 	}
 }

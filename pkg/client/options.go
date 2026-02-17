@@ -163,3 +163,10 @@ func WithDropOnQueueFull(drop bool) ConfigOption {
 		c.DropOnQueueFull = drop
 	}
 }
+
+// WithMaxBackgroundSenders sets the max concurrent background batch senders.
+func WithMaxBackgroundSenders(n int) ConfigOption {
+	return func(c *Config) {
+		c.MaxBackgroundSenders = n
+	}
+}
