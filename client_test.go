@@ -22,17 +22,17 @@ func TestNewClient(t *testing.T) {
 	}
 	defer client.Shutdown(context.Background())
 
-	if client.config.PublicKey != "pk-lf-test-key" {
-		t.Errorf("PublicKey = %v, want pk-lf-test-key", client.config.PublicKey)
+	if client.RootConfig().PublicKey != "pk-lf-test-key" {
+		t.Errorf("PublicKey = %v, want pk-lf-test-key", client.RootConfig().PublicKey)
 	}
-	if client.config.SecretKey != "sk-lf-test-key" {
-		t.Errorf("SecretKey = %v, want sk-lf-test-key", client.config.SecretKey)
+	if client.RootConfig().SecretKey != "sk-lf-test-key" {
+		t.Errorf("SecretKey = %v, want sk-lf-test-key", client.RootConfig().SecretKey)
 	}
-	if client.config.Region != RegionUS {
-		t.Errorf("Region = %v, want %v", client.config.Region, RegionUS)
+	if client.RootConfig().Region != RegionUS {
+		t.Errorf("Region = %v, want %v", client.RootConfig().Region, RegionUS)
 	}
-	if client.config.BatchSize != 50 {
-		t.Errorf("BatchSize = %v, want 50", client.config.BatchSize)
+	if client.RootConfig().BatchSize != 50 {
+		t.Errorf("BatchSize = %v, want 50", client.RootConfig().BatchSize)
 	}
 }
 
@@ -69,7 +69,7 @@ func TestNewClientValidation(t *testing.T) {
 
 func TestClientHealth(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/health" {
+		if r.URL.Path != "/api/public/health" {
 			t.Errorf("Expected /health, got %s", r.URL.Path)
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -138,7 +138,7 @@ func TestClientFlush(t *testing.T) {
 	var mu sync.Mutex
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/ingestion" {
+		if r.URL.Path == "/api/public/ingestion" {
 			var req ingestionRequest
 			json.NewDecoder(r.Body).Decode(&req)
 
@@ -424,7 +424,7 @@ func TestBatchSizeTriggersFlush(t *testing.T) {
 	var mu sync.Mutex
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/ingestion" {
+		if r.URL.Path == "/api/public/ingestion" {
 			mu.Lock()
 			flushCount++
 			mu.Unlock()
@@ -470,6 +470,9 @@ type testLogger struct {
 	messages []string
 }
 
+// Compile-time interface assertions
+var _ Logger = (*testLogger)(nil)
+
 func (l *testLogger) Printf(format string, v ...any) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -489,6 +492,9 @@ type testStructuredLogger struct {
 	debugs []string
 	infos  []string
 }
+
+// Compile-time interface assertion
+var _ StructuredLogger = (*testStructuredLogger)(nil)
 
 func (l *testStructuredLogger) Debug(msg string, args ...any) {
 	l.mu.Lock()
@@ -531,7 +537,7 @@ func TestHandleErrorWithLogger(t *testing.T) {
 
 	// Trigger an error through handleError
 	testErr := NewValidationError("test", "test error")
-	client.handleError(testErr)
+	client.HandleError(testErr)
 
 	// Give it a moment to process
 	time.Sleep(10 * time.Millisecond)
@@ -557,7 +563,7 @@ func TestHandleErrorWithStructuredLogger(t *testing.T) {
 
 	// Trigger an error through handleError
 	testErr := NewValidationError("test", "test error")
-	client.handleError(testErr)
+	client.HandleError(testErr)
 
 	// Give it a moment to process
 	time.Sleep(10 * time.Millisecond)
@@ -590,7 +596,7 @@ func TestHandleErrorWithErrorHandler(t *testing.T) {
 
 	// Trigger an error through handleError
 	testErr := NewValidationError("test", "test error")
-	client.handleError(testErr)
+	client.HandleError(testErr)
 
 	// Give it a moment to process
 	time.Sleep(10 * time.Millisecond)
@@ -620,7 +626,7 @@ func TestHandleErrorWithMetrics(t *testing.T) {
 
 	// Trigger an error through handleError
 	testErr := NewValidationError("test", "test error")
-	client.handleError(testErr)
+	client.HandleError(testErr)
 
 	// Give it a moment to process
 	time.Sleep(10 * time.Millisecond)
@@ -637,6 +643,9 @@ type testMetrics struct {
 	counters map[string]int64
 	gauges   map[string]float64
 }
+
+// Compile-time interface assertion
+var _ Metrics = (*testMetrics)(nil)
 
 func (m *testMetrics) IncrementCounter(name string, value int64) {
 	m.mu.Lock()
@@ -673,7 +682,7 @@ func TestHandleQueueFull(t *testing.T) {
 	var mu sync.Mutex
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/ingestion" {
+		if r.URL.Path == "/api/public/ingestion" {
 			mu.Lock()
 			receivedBatches++
 			mu.Unlock()
@@ -721,7 +730,7 @@ func TestBatchProcessorDrainOnShutdown(t *testing.T) {
 
 	// Server with slight delay to simulate processing time
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/ingestion" {
+		if r.URL.Path == "/api/public/ingestion" {
 			time.Sleep(10 * time.Millisecond)
 			mu.Lock()
 			receivedBatches++
@@ -770,7 +779,7 @@ func TestBatchProcessorContextCancelled(t *testing.T) {
 	var mu sync.Mutex
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/ingestion" {
+		if r.URL.Path == "/api/public/ingestion" {
 			mu.Lock()
 			receivedBatches++
 			mu.Unlock()
@@ -1106,7 +1115,7 @@ func TestShutdownDrainsAllEvents(t *testing.T) {
 	var mu sync.Mutex
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/ingestion" {
+		if r.URL.Path == "/api/public/ingestion" {
 			var req struct {
 				Batch []json.RawMessage `json:"batch"`
 			}
@@ -1169,7 +1178,7 @@ func TestShutdownUnderConcurrentLoad(t *testing.T) {
 	var mu sync.Mutex
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/ingestion" {
+		if r.URL.Path == "/api/public/ingestion" {
 			var req struct {
 				Batch []json.RawMessage `json:"batch"`
 			}
@@ -1252,7 +1261,7 @@ func TestShutdownWithQueuedBatches(t *testing.T) {
 
 	// Server with delay to cause batches to queue up
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/ingestion" {
+		if r.URL.Path == "/api/public/ingestion" {
 			time.Sleep(50 * time.Millisecond) // Delay to queue batches
 			mu.Lock()
 			receivedBatches++
@@ -1307,7 +1316,7 @@ func TestShutdownWithQueuedBatches(t *testing.T) {
 // TestBackpressureIntegration verifies that the backpressure system is wired up correctly.
 func TestBackpressureIntegration(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/ingestion" {
+		if r.URL.Path == "/api/public/ingestion" {
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(IngestionResult{
 				Successes: []IngestionSuccess{{ID: "1", Status: 200}},
@@ -1330,10 +1339,8 @@ func TestBackpressureIntegration(t *testing.T) {
 	}
 	defer client.Shutdown(context.Background())
 
-	// Verify backpressure handler is initialized
-	if client.backpressure == nil {
-		t.Error("Expected backpressure handler to be initialized")
-	}
+	// Verify backpressure handler is working via public API
+	// (With BackpressureEnabled(), we expect it to return status)
 
 	// Verify we can get backpressure status
 	status := client.BackpressureStatus()
@@ -1356,7 +1363,7 @@ func TestBackpressureIntegration(t *testing.T) {
 // TestBackpressureCallback verifies that backpressure callbacks are invoked.
 func TestBackpressureCallback(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/ingestion" {
+		if r.URL.Path == "/api/public/ingestion" {
 			// Slow response to cause backpressure
 			time.Sleep(100 * time.Millisecond)
 			w.Header().Set("Content-Type", "application/json")
@@ -1413,7 +1420,7 @@ func TestBackpressureCallback(t *testing.T) {
 // TestDropOnQueueFull verifies events are dropped when queue is full and DropOnQueueFull is set.
 func TestDropOnQueueFull(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/ingestion" {
+		if r.URL.Path == "/api/public/ingestion" {
 			// Very slow response to cause queue backup
 			time.Sleep(500 * time.Millisecond)
 			w.Header().Set("Content-Type", "application/json")

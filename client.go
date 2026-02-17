@@ -2,45 +2,40 @@ package langfuse
 
 import (
 	"context"
-	"fmt"
 	"log"
+	"net/http"
+	"net/url"
 	"os"
-	"sync"
+	"strconv"
+	"time"
+
+	pkgclient "github.com/jdziat/langfuse-go/pkg/client"
+	pkghttp "github.com/jdziat/langfuse-go/pkg/http"
 )
+
+// ============================================================================
+// API Endpoints
+// ============================================================================
+
+// ============================================================================
+// Client
+// ============================================================================
 
 // defaultStderrLogger is used as a fallback when no logger is configured.
 // This ensures async errors are never silently dropped.
 var defaultStderrLogger = log.New(os.Stderr, "langfuse: ", log.LstdFlags)
 
 // Client is the main Langfuse client.
+// It embeds *pkgclient.Client for core functionality (HTTP, lifecycle, batching)
+// and adds sub-clients for the Langfuse API.
 type Client struct {
-	config *Config
-	http   *httpClient
+	// Embed core client for HTTP, lifecycle, batching, and backpressure
+	*pkgclient.Client
 
-	// Lifecycle management (goroutine leak prevention)
-	lifecycle   *LifecycleManager
-	idGenerator *IDGenerator
+	// Root-specific config (extends pkg/client.Config with evaluation, etc.)
+	rootConfig *Config
 
-	// Batching with proper lifecycle management
-	mu            sync.Mutex
-	pendingEvents []ingestionEvent
-	closed        bool
-
-	// Background goroutine management
-	ctx        context.Context
-	cancel     context.CancelFunc
-	wg         sync.WaitGroup
-	batchQueue chan batchRequest
-	stopFlush  chan struct{}
-
-	// Graceful shutdown signaling
-	drainSignal   chan struct{} // Signal batch processor to drain
-	drainComplete chan struct{} // Batch processor signals drain complete
-
-	// Backpressure management
-	backpressure *BackpressureHandler
-
-	// Sub-clients
+	// Sub-clients for Langfuse API
 	traces       *TracesClient
 	observations *ObservationsClient
 	scores       *ScoresClient
@@ -90,102 +85,127 @@ func NewWithConfig(cfg *Config) (*Client, error) {
 		return nil, err
 	}
 
-	httpClient := newHTTPClient(&cfgCopy)
+	// Convert root Config to pkg/client.Config
+	pkgCfg := convertToPkgClientConfig(&cfgCopy)
 
-	ctx, cancel := context.WithCancel(context.Background())
-
-	// Initialize lifecycle manager for goroutine leak detection
-	lifecycle := NewLifecycleManager(&LifecycleConfig{
-		IdleWarningDuration: cfgCopy.IdleWarningDuration,
-		Logger:              cfgCopy.Logger,
-		Metrics:             cfgCopy.Metrics,
-	})
-
-	// Initialize ID generator with configured mode
-	idGenerator := NewIDGenerator(&IDGeneratorConfig{
-		Mode:    cfgCopy.IDGenerationMode,
-		Metrics: cfgCopy.Metrics,
-		Logger:  cfgCopy.Logger,
-	})
-
-	// Initialize backpressure handler
-	var backpressureHandler *BackpressureHandler
-	if cfgCopy.BackpressureConfig != nil {
-		backpressureHandler = NewBackpressureHandler(cfgCopy.BackpressureConfig)
-	} else {
-		// Create default backpressure handler using queue capacity
-		queueCapacity := cfgCopy.BatchSize * cfgCopy.BatchQueueSize
-		backpressureHandler = NewBackpressureHandler(&BackpressureHandlerConfig{
-			Monitor: NewQueueMonitor(&QueueMonitorConfig{
-				Threshold:      DefaultBackpressureThreshold(),
-				Capacity:       queueCapacity,
-				OnBackpressure: cfgCopy.OnBackpressure,
-				Metrics:        cfgCopy.Metrics,
-				Logger:         cfgCopy.Logger,
-			}),
-			BlockOnFull: cfgCopy.BlockOnQueueFull,
-			DropOnFull:  cfgCopy.DropOnQueueFull,
-			Logger:      cfgCopy.Logger,
-			Metrics:     cfgCopy.Metrics,
-		})
+	// Create the core client from pkg/client
+	coreClient, err := pkgclient.NewWithConfig(pkgCfg)
+	if err != nil {
+		return nil, err
 	}
 
 	c := &Client{
-		config:        &cfgCopy,
-		http:          httpClient,
-		lifecycle:     lifecycle,
-		idGenerator:   idGenerator,
-		pendingEvents: make([]ingestionEvent, 0, cfgCopy.BatchSize),
-		ctx:           ctx,
-		cancel:        cancel,
-		batchQueue:    make(chan batchRequest, cfgCopy.BatchQueueSize),
-		stopFlush:     make(chan struct{}),
-		drainSignal:   make(chan struct{}),
-		drainComplete: make(chan struct{}),
-		backpressure:  backpressureHandler,
+		Client:     coreClient,
+		rootConfig: &cfgCopy,
 	}
 
-	// Initialize sub-clients
-	c.traces = &TracesClient{client: c}
-	c.observations = &ObservationsClient{client: c}
-	c.scores = &ScoresClient{client: c}
-	c.prompts = &PromptsClient{client: c}
-	c.datasets = &DatasetsClient{client: c}
-	c.sessions = &SessionsClient{client: c}
-	c.models = &ModelsClient{client: c}
-
-	// Start background batch processor
-	c.wg.Add(1)
-	go c.batchProcessor()
-
-	// Start flush timer
-	c.wg.Add(1)
-	go c.flushLoop()
+	// Initialize sub-clients using the embedded client's HTTP() method
+	c.traces = newTracesClient(c)
+	c.observations = newObservationsClient(c)
+	c.scores = newScoresClient(c)
+	c.prompts = newPromptsClient(c)
+	c.datasets = newDatasetsClient(c)
+	c.sessions = newSessionsClient(c)
+	c.models = newModelsClient(c)
 
 	return c, nil
 }
 
-// handleError handles async errors.
-// Errors are NEVER silently dropped - if no handler is configured,
-// they are logged to stderr as a fallback.
-func (c *Client) handleError(err error) {
+// convertToPkgClientConfig converts a root Config to a pkg/client.Config.
+// This maps all common fields and converts types where needed.
+func convertToPkgClientConfig(cfg *Config) *pkgclient.Config {
+	pkgCfg := &pkgclient.Config{
+		PublicKey:           cfg.PublicKey,
+		SecretKey:           cfg.SecretKey,
+		BaseURL:             cfg.BaseURL,
+		Region:              cfg.Region,
+		HTTPClient:          cfg.HTTPClient,
+		Timeout:             cfg.Timeout,
+		MaxRetries:          cfg.MaxRetries,
+		RetryDelay:          cfg.RetryDelay,
+		BatchSize:           cfg.BatchSize,
+		FlushInterval:       cfg.FlushInterval,
+		Debug:               cfg.Debug,
+		ErrorHandler:        cfg.ErrorHandler,
+		MaxIdleConns:        cfg.MaxIdleConns,
+		MaxIdleConnsPerHost: cfg.MaxIdleConnsPerHost,
+		IdleConnTimeout:     cfg.IdleConnTimeout,
+		ShutdownTimeout:     cfg.ShutdownTimeout,
+		BatchQueueSize:      cfg.BatchQueueSize,
+		IdleWarningDuration: cfg.IdleWarningDuration,
+		IDGenerationMode:     pkgclient.IDGenerationMode(cfg.IDGenerationMode),
+		BlockOnQueueFull:     cfg.BlockOnQueueFull,
+		DropOnQueueFull:      cfg.DropOnQueueFull,
+		MaxBackgroundSenders: cfg.MaxBackgroundSenders,
+	}
+
+	// Logger, StructuredLogger, and Metrics are type aliases to pkgclient versions,
+	// so they can be assigned directly without wrappers.
+	if cfg.Logger != nil {
+		pkgCfg.Logger = cfg.Logger
+	}
+	if cfg.StructuredLogger != nil {
+		pkgCfg.StructuredLogger = cfg.StructuredLogger
+	}
+	if cfg.Metrics != nil {
+		pkgCfg.Metrics = cfg.Metrics
+	}
+
+	// Convert RetryStrategy
+	if cfg.RetryStrategy != nil {
+		pkgCfg.RetryStrategy = cfg.RetryStrategy
+	}
+
+	// Convert CircuitBreaker config
+	if cfg.CircuitBreaker != nil {
+		pkgCfg.CircuitBreaker = cfg.CircuitBreaker
+	}
+
+	// OnBatchFlushed can be assigned directly since BatchResult is an alias.
+	if cfg.OnBatchFlushed != nil {
+		pkgCfg.OnBatchFlushed = cfg.OnBatchFlushed
+	}
+
+	// HTTPHooks can be assigned directly since both root HTTPHook and pkgclient.HTTPHook
+	// are aliases to pkghttp.HTTPHook - they're the same type.
+	if len(cfg.HTTPHooks) > 0 {
+		pkgCfg.HTTPHooks = cfg.HTTPHooks
+	}
+
+	// Convert BackpressureConfig
+	if cfg.BackpressureConfig != nil {
+		pkgCfg.BackpressureConfig = cfg.BackpressureConfig
+	}
+
+	// Convert OnBackpressure callback
+	if cfg.OnBackpressure != nil {
+		pkgCfg.OnBackpressure = cfg.OnBackpressure
+	}
+
+	return pkgCfg
+}
+
+// handleError handles async errors for root-specific functionality.
+// For core client errors, the embedded client's handleError is used.
+// This method handles errors specific to root-level features.
+func (c *Client) handleRootError(err error) {
 	handled := false
 
-	if c.config.ErrorHandler != nil {
-		c.config.ErrorHandler(err)
+	if c.rootConfig.ErrorHandler != nil {
+		c.rootConfig.ErrorHandler(err)
 		handled = true
 	}
 
-	if c.config.StructuredLogger != nil {
-		c.config.StructuredLogger.Error("async error", "error", err)
+	if c.rootConfig.StructuredLogger != nil {
+		c.rootConfig.StructuredLogger.Error("async error", "error", err)
 		handled = true
-	} else if c.config.Logger != nil {
-		c.config.Logger.Printf("error: %v", err)
+	} else if c.rootConfig.Logger != nil {
+		c.rootConfig.Logger.Printf("error: %v", err)
 		handled = true
 	}
 
-	if c.config.Metrics != nil {
-		c.config.Metrics.IncrementCounter("langfuse.errors", 1)
+	if c.rootConfig.Metrics != nil {
+		c.rootConfig.Metrics.IncrementCounter("langfuse.errors", 1)
 	}
 
 	// Never silently drop errors - log to stderr as fallback
@@ -194,32 +214,7 @@ func (c *Client) handleError(err error) {
 	}
 }
 
-// log logs a message if logging is enabled.
-func (c *Client) log(format string, v ...any) {
-	if c.config.StructuredLogger != nil {
-		c.config.StructuredLogger.Debug(fmt.Sprintf(format, v...))
-	} else if c.config.Logger != nil {
-		c.config.Logger.Printf(format, v...)
-	}
-}
-
-// logInfo logs an info-level message.
-func (c *Client) logInfo(msg string, args ...any) {
-	if c.config.StructuredLogger != nil {
-		c.config.StructuredLogger.Info(msg, args...)
-	} else if c.config.Logger != nil {
-		c.config.Logger.Printf(msg + formatArgs(args))
-	}
-}
-
-// logError logs an error-level message.
-func (c *Client) logError(msg string, args ...any) {
-	if c.config.StructuredLogger != nil {
-		c.config.StructuredLogger.Error(msg, args...)
-	} else if c.config.Logger != nil {
-		c.config.Logger.Printf("[ERROR] " + msg + formatArgs(args))
-	}
-}
+// Note: log, logInfo, logError methods are provided by the embedded *pkgclient.Client
 
 // Traces returns the traces sub-client.
 func (c *Client) Traces() *TracesClient {
@@ -359,55 +354,445 @@ func (c *Client) ModelsWithOptions(opts ...ModelsOption) *ConfiguredModelsClient
 	}
 }
 
-// CircuitBreakerState returns the current state of the circuit breaker.
-// Returns CircuitClosed if no circuit breaker is configured.
-func (c *Client) CircuitBreakerState() CircuitState {
-	if c.http.circuitBreaker == nil {
-		return CircuitClosed
-	}
-	return c.http.circuitBreaker.State()
-}
+// Note: CircuitBreakerState, IsUnderBackpressure, GenerateID, IDStats methods
+// are provided by the embedded *pkgclient.Client
 
 // BackpressureStatus returns the current backpressure state.
 // Use this to monitor queue health and make decisions about event submission.
+// Note: This wraps the embedded client's method to return the root BackpressureHandlerStats type.
 func (c *Client) BackpressureStatus() BackpressureHandlerStats {
-	if c.backpressure == nil {
-		return BackpressureHandlerStats{}
-	}
-	return c.backpressure.Stats()
+	return c.Client.BackpressureStatus()
 }
 
 // BackpressureLevel returns the current backpressure level.
 // Returns BackpressureNone if no backpressure handler is configured.
+// Note: This wraps the embedded client's method.
 func (c *Client) BackpressureLevel() BackpressureLevel {
-	if c.backpressure == nil {
-		return BackpressureNone
-	}
-	return c.backpressure.Monitor().Level()
+	return c.Client.BackpressureLevel()
 }
 
-// IsUnderBackpressure returns true if the event queue is experiencing backpressure.
-// Use this for adaptive behavior in high-throughput scenarios.
-func (c *Client) IsUnderBackpressure() bool {
-	if c.backpressure == nil {
-		return false
-	}
-	return c.backpressure.Monitor().Level() >= BackpressureWarning
+// ============================================================================
+// Client Interfaces
+// ============================================================================
+
+// Tracer defines the core tracing interface.
+// This interface is implemented by *Client and can be used for
+// dependency injection and testing.
+//
+// Example:
+//
+//	func ProcessRequest(ctx context.Context, tracer langfuse.Tracer) error {
+//	    trace, err := tracer.NewTrace().Name("process-request").Create(ctx)
+//	    if err != nil {
+//	        return err
+//	    }
+//	    // ... do work ...
+//	    return nil
+//	}
+type Tracer interface {
+	// NewTrace creates a new trace builder.
+	NewTrace() *TraceBuilder
+
+	// Flush sends all pending events to Langfuse.
+	// It blocks until all events are sent or the context is cancelled.
+	Flush(ctx context.Context) error
+
+	// Shutdown gracefully shuts down the client, flushing any pending events.
+	// After Shutdown returns, the client should not be used.
+	Shutdown(ctx context.Context) error
 }
 
-// GenerateID generates a unique ID using the client's configured ID generator.
-// Returns an error if the client is configured with IDModeStrict and crypto/rand fails.
-func (c *Client) GenerateID() (string, error) {
-	if c.idGenerator == nil {
-		return GenerateID()
-	}
-	return c.idGenerator.Generate()
+// Ensure Client implements Tracer at compile time.
+var _ Tracer = (*Client)(nil)
+
+// Observer defines the interface for creating observations within a trace.
+// This interface is implemented by TraceContext, SpanContext, and GenerationContext.
+//
+// The Advanced API uses builder methods (NewSpan, NewGeneration, etc.) for full control.
+// The Simple API uses convenience methods (Span, Generation, etc.) for common use cases.
+type Observer interface {
+	// ID returns the ID of this trace or observation.
+	ID() string
+
+	// TraceID returns the trace ID that this observation belongs to.
+	TraceID() string
+
+	// NewSpan creates a new span builder as a child of this context (Advanced API).
+	NewSpan() *SpanBuilder
+
+	// NewGeneration creates a new generation builder as a child of this context (Advanced API).
+	NewGeneration() *GenerationBuilder
+
+	// NewEvent creates a new event builder as a child of this context (Advanced API).
+	NewEvent() *EventBuilder
+
+	// NewScore creates a new score builder for this context (Advanced API).
+	NewScore() *ScoreBuilder
 }
 
-// IDStats returns statistics about ID generation.
-func (c *Client) IDStats() IDStats {
-	if c.idGenerator == nil {
-		return IDStats{}
+// Ensure contexts implement Observer at compile time.
+var (
+	_ Observer = (*TraceContext)(nil)
+	_ Observer = (*SpanContext)(nil)
+	_ Observer = (*GenerationContext)(nil)
+)
+
+// Flusher defines the interface for types that can flush pending data.
+type Flusher interface {
+	Flush(ctx context.Context) error
+}
+
+// Ensure Client implements Flusher at compile time.
+var _ Flusher = (*Client)(nil)
+
+// HealthChecker defines the interface for health checking.
+type HealthChecker interface {
+	Health(ctx context.Context) (*HealthStatus, error)
+}
+
+// Ensure Client implements HealthChecker at compile time.
+var _ HealthChecker = (*Client)(nil)
+
+// ============================================================================
+// HTTP Hooks - Re-exported from pkg/http
+// ============================================================================
+
+// HookPriority determines how hook failures are handled.
+type HookPriority = pkghttp.HookPriority
+
+const (
+	// HookPriorityObservational indicates a hook that should not abort requests on failure.
+	HookPriorityObservational = pkghttp.HookPriorityObservational
+
+	// HookPriorityCritical indicates a hook that should abort requests on failure.
+	HookPriorityCritical = pkghttp.HookPriorityCritical
+)
+
+// HTTPHook allows customizing HTTP request/response handling.
+type HTTPHook = pkghttp.HTTPHook
+
+// ClassifiedHook wraps an HTTPHook with priority information.
+type ClassifiedHook = pkghttp.ClassifiedHook
+
+// HTTPHookFunc is a function adapter for simple hooks.
+type HTTPHookFunc = pkghttp.HTTPHookFunc
+
+// combineHooks combines multiple hooks into a single hook.
+var combineHooks = pkghttp.CombineHooks
+
+// ClassifiedHookChain manages multiple hooks with different priorities.
+type ClassifiedHookChain = pkghttp.ClassifiedHookChain
+
+// NewClassifiedHookChain creates a new classified hook chain.
+func NewClassifiedHookChain(logger Logger, metrics Metrics) *ClassifiedHookChain {
+	return pkghttp.NewClassifiedHookChain(logger, metrics)
+}
+
+// ============================================================================
+// Predefined Hooks - Re-exported from pkg/http
+// ============================================================================
+
+// HeaderHook creates a hook that adds custom headers to all requests.
+var HeaderHook = pkghttp.HeaderHook
+
+// DynamicHeaderHook creates a hook that adds headers from a function.
+var DynamicHeaderHook = pkghttp.DynamicHeaderHook
+
+// LoggingHook creates a hook that logs request and response information.
+func LoggingHook(logger Logger) HTTPHook {
+	return pkghttp.LoggingHook(logger)
+}
+
+// MetricsHook creates a hook that records request metrics.
+func MetricsHook(m Metrics) HTTPHook {
+	return pkghttp.MetricsHook(m)
+}
+
+// TracingHook creates a hook that propagates tracing context.
+// It extracts trace IDs from context and adds them as headers.
+//
+// Headers added:
+//   - X-Trace-ID: The trace ID if present in context
+//   - X-Parent-Span-ID: The parent span ID if present in context
+//
+// Example:
+//
+//	langfuse.WithHTTPHooks(
+//	    langfuse.TracingHook(),
+//	)
+func TracingHook() HTTPHook {
+	return HTTPHookFunc{
+		Before: func(ctx context.Context, req *http.Request) error {
+			// Check for trace context
+			if tc, ok := TraceFromContext(ctx); ok {
+				req.Header.Set("X-Langfuse-Trace-ID", tc.ID())
+			}
+			return nil
+		},
 	}
-	return c.idGenerator.Stats()
+}
+
+// DebugHook creates a hook that logs detailed request/response information.
+func DebugHook(logger Logger) HTTPHook {
+	return pkghttp.DebugHook(logger)
+}
+
+// ============================================================================
+// Classified Hook Constructors - Re-exported from pkg/http
+// ============================================================================
+
+// ObservationalLoggingHook creates a logging hook that won't abort requests on failure.
+func ObservationalLoggingHook(logger Logger) ClassifiedHook {
+	return pkghttp.ObservationalLoggingHook(logger)
+}
+
+// ObservationalMetricsHook creates a metrics hook that won't abort requests on failure.
+func ObservationalMetricsHook(m Metrics) ClassifiedHook {
+	return pkghttp.ObservationalMetricsHook(m)
+}
+
+// ObservationalTracingHook creates a tracing hook that won't abort requests on failure.
+// This hook uses TraceFromContext to propagate Langfuse trace IDs.
+func ObservationalTracingHook() ClassifiedHook {
+	return ClassifiedHook{
+		Hook:     TracingHook(),
+		Priority: HookPriorityObservational,
+		Name:     "tracing",
+	}
+}
+
+// ObservationalDebugHook creates a debug hook that won't abort requests on failure.
+func ObservationalDebugHook(logger Logger) ClassifiedHook {
+	return pkghttp.ObservationalDebugHook(logger)
+}
+
+// CriticalHeaderHook creates a header hook that aborts requests on failure.
+var CriticalHeaderHook = pkghttp.CriticalHeaderHook
+
+// CriticalAuthHook creates an authentication hook that aborts requests on failure.
+var CriticalAuthHook = pkghttp.CriticalAuthHook
+
+// CriticalValidationHook creates a validation hook that aborts requests on failure.
+var CriticalValidationHook = pkghttp.CriticalValidationHook
+
+// NewClassifiedHook creates a ClassifiedHook with the given parameters.
+var NewClassifiedHook = pkghttp.NewClassifiedHook
+
+// ============================================================================
+// Retry Strategy - Re-exports from pkg/http
+// ============================================================================
+
+// RetryStrategy defines how failed requests are retried.
+type RetryStrategy = pkghttp.RetryStrategy
+
+// RetryStrategyWithError is an optional extension of RetryStrategy that
+// allows the retry delay to be influenced by the error.
+// If a strategy implements this interface, RetryDelayWithError is called
+// instead of RetryDelay, allowing it to use Retry-After headers.
+type RetryStrategyWithError = pkghttp.RetryStrategyWithError
+
+// ExponentialBackoff implements exponential backoff with optional jitter.
+type ExponentialBackoff = pkghttp.ExponentialBackoff
+
+// NewExponentialBackoff creates a new exponential backoff strategy with defaults.
+var NewExponentialBackoff = pkghttp.NewExponentialBackoff
+
+// NoRetry is a retry strategy that never retries.
+type NoRetry = pkghttp.NoRetry
+
+// FixedDelay is a retry strategy with a fixed delay between retries.
+type FixedDelay = pkghttp.FixedDelay
+
+// NewFixedDelay creates a new fixed delay retry strategy.
+func NewFixedDelay(delay time.Duration, maxRetries int) *FixedDelay {
+	return pkghttp.NewFixedDelay(delay, maxRetries)
+}
+
+// LinearBackoff is a retry strategy with linearly increasing delays.
+type LinearBackoff = pkghttp.LinearBackoff
+
+// NewLinearBackoff creates a new linear backoff retry strategy.
+func NewLinearBackoff(initialDelay, increment time.Duration, maxRetries int) *LinearBackoff {
+	return pkghttp.NewLinearBackoff(initialDelay, increment, maxRetries)
+}
+
+// ============================================================================
+// Circuit Breaker - Re-exports from pkg/http
+// ============================================================================
+
+// CircuitState represents the state of a circuit breaker.
+type CircuitState = pkghttp.CircuitState
+
+// Circuit breaker states.
+const (
+	// CircuitClosed allows requests to pass through normally.
+	CircuitClosed = pkghttp.CircuitClosed
+	// CircuitOpen blocks all requests immediately.
+	CircuitOpen = pkghttp.CircuitOpen
+	// CircuitHalfOpen allows a limited number of requests to test if the service recovered.
+	CircuitHalfOpen = pkghttp.CircuitHalfOpen
+)
+
+// ErrCircuitOpen is returned when the circuit breaker is open and blocking requests.
+// Re-exported from pkg/http for consistent error comparisons with errors.Is().
+var ErrCircuitOpen = pkghttp.ErrCircuitOpen
+
+// CircuitBreakerConfig configures the circuit breaker behavior.
+type CircuitBreakerConfig = pkghttp.CircuitBreakerConfig
+
+// DefaultCircuitBreakerConfig returns a CircuitBreakerConfig with sensible defaults.
+var DefaultCircuitBreakerConfig = pkghttp.DefaultCircuitBreakerConfig
+
+// CircuitBreaker implements the circuit breaker pattern for fault tolerance.
+type CircuitBreaker = pkghttp.CircuitBreaker
+
+// NewCircuitBreaker creates a new circuit breaker with the given configuration.
+var NewCircuitBreaker = pkghttp.NewCircuitBreaker
+
+// CircuitBreakerOption configures a circuit breaker.
+type CircuitBreakerOption = pkghttp.CircuitBreakerOption
+
+// WithFailureThreshold sets the failure threshold.
+func WithFailureThreshold(n int) CircuitBreakerOption {
+	return pkghttp.WithFailureThreshold(n)
+}
+
+// WithSuccessThreshold sets the success threshold for half-open state.
+func WithSuccessThreshold(n int) CircuitBreakerOption {
+	return pkghttp.WithSuccessThreshold(n)
+}
+
+// WithCircuitTimeout sets the timeout before transitioning from open to half-open.
+func WithCircuitTimeout(d time.Duration) CircuitBreakerOption {
+	return pkghttp.WithCircuitTimeout(d)
+}
+
+// WithHalfOpenMaxRequests sets the max requests allowed in half-open state.
+func WithHalfOpenMaxRequests(n int) CircuitBreakerOption {
+	return pkghttp.WithHalfOpenMaxRequests(n)
+}
+
+// WithStateChangeCallback sets the callback for state changes.
+func WithStateChangeCallback(fn func(from, to CircuitState)) CircuitBreakerOption {
+	return pkghttp.WithStateChangeCallback(fn)
+}
+
+// WithFailureChecker sets a custom function to determine if an error is a failure.
+func WithFailureChecker(fn func(err error) bool) CircuitBreakerOption {
+	return pkghttp.WithFailureChecker(fn)
+}
+
+// NewCircuitBreakerWithOptions creates a circuit breaker with functional options.
+var NewCircuitBreakerWithOptions = pkghttp.NewCircuitBreakerWithOptions
+
+// ============================================================================
+// Pagination Helpers
+// ============================================================================
+
+// PaginationParams represents pagination parameters for list requests.
+type PaginationParams struct {
+	Page   int
+	Limit  int
+	Cursor string
+}
+
+// ToQuery converts pagination parameters to URL query values.
+func (p *PaginationParams) ToQuery() url.Values {
+	q := url.Values{}
+	if p.Page > 0 {
+		q.Set("page", strconv.Itoa(p.Page))
+	}
+	if p.Limit > 0 {
+		q.Set("limit", strconv.Itoa(p.Limit))
+	}
+	if p.Cursor != "" {
+		q.Set("cursor", p.Cursor)
+	}
+	return q
+}
+
+// PaginatedResponse represents a paginated response.
+type PaginatedResponse struct {
+	Meta MetaResponse `json:"meta"`
+}
+
+// MetaResponse represents pagination metadata.
+type MetaResponse struct {
+	Page       int    `json:"page"`
+	Limit      int    `json:"limit"`
+	TotalItems int    `json:"totalItems"`
+	TotalPages int    `json:"totalPages"`
+	NextCursor string `json:"nextCursor,omitempty"`
+}
+
+// HasMore returns true if there are more pages.
+func (m *MetaResponse) HasMore() bool {
+	return m.NextCursor != "" || m.Page < m.TotalPages
+}
+
+// FilterParams represents common filter parameters.
+type FilterParams struct {
+	Name          string
+	UserID        string
+	Type          string
+	TraceID       string
+	SessionID     string
+	Level         string
+	Version       string
+	Environment   string
+	FromStartTime time.Time
+	ToStartTime   time.Time
+	Tags          []string
+}
+
+// ToQuery converts filter parameters to URL query values.
+func (f *FilterParams) ToQuery() url.Values {
+	q := url.Values{}
+	if f.Name != "" {
+		q.Set("name", f.Name)
+	}
+	if f.UserID != "" {
+		q.Set("userId", f.UserID)
+	}
+	if f.Type != "" {
+		q.Set("type", f.Type)
+	}
+	if f.TraceID != "" {
+		q.Set("traceId", f.TraceID)
+	}
+	if f.SessionID != "" {
+		q.Set("sessionId", f.SessionID)
+	}
+	if f.Level != "" {
+		q.Set("level", f.Level)
+	}
+	if f.Version != "" {
+		q.Set("version", f.Version)
+	}
+	if f.Environment != "" {
+		q.Set("environment", f.Environment)
+	}
+	if !f.FromStartTime.IsZero() {
+		q.Set("fromStartTime", f.FromStartTime.Format(time.RFC3339))
+	}
+	if !f.ToStartTime.IsZero() {
+		q.Set("toStartTime", f.ToStartTime.Format(time.RFC3339))
+	}
+	for _, tag := range f.Tags {
+		q.Add("tags", tag)
+	}
+	return q
+}
+
+// mergeQuery merges multiple url.Values into one.
+func mergeQuery(queries ...url.Values) url.Values {
+	result := url.Values{}
+	for _, q := range queries {
+		for k, v := range q {
+			for _, val := range v {
+				result.Add(k, val)
+			}
+		}
+	}
+	return result
 }

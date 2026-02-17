@@ -49,17 +49,7 @@ type WorkflowBuilder struct {
 	// Internal state
 	trace     *langfuse.TraceContext
 	evalState *langfuse.EvalState
-	steps     []workflowStep
 	startTime time.Time
-}
-
-// workflowStep represents a step in the workflow.
-type workflowStep struct {
-	stepType string
-	name     string
-	input    any
-	output   any
-	metadata langfuse.Metadata
 }
 
 // NewWorkflow creates a new workflow builder for the specified workflow type.

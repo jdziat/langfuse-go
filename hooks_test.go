@@ -119,9 +119,6 @@ func TestCombineHooks(t *testing.T) {
 		if combined == nil {
 			t.Error("combineHooks should return a chain for multiple hooks")
 		}
-		if _, ok := combined.(*hookChain); !ok {
-			t.Error("combineHooks should return a hookChain for multiple hooks")
-		}
 	})
 }
 

@@ -1,453 +1,641 @@
 package langfuse
 
 import (
-	"encoding/json"
+	"errors"
+	"fmt"
 	"time"
+
+	pkgconfig "github.com/jdziat/langfuse-go/pkg/config"
+	pkgerrors "github.com/jdziat/langfuse-go/pkg/errors"
+	pkgid "github.com/jdziat/langfuse-go/pkg/id"
+	"github.com/jdziat/langfuse-go/pkg/types"
 )
 
-// JSON is an alias for any, representing any JSON value.
-// Use this for input/output fields that accept arbitrary JSON data.
-//
-// Example:
-//
-//	trace.Generation().
-//	    Input(langfuse.JSON("What is Go?")).
-//	    Output(langfuse.JSON(map[string]any{"answer": "Go is..."})).
-//	    Create()
-type JSON = any
+// ============================================================================
+// Type Aliases - Re-exported from pkg/types for backward compatibility
+// ============================================================================
 
-// JSONObject is an alias for map[string]any, representing a JSON object.
-// Use this for metadata and structured data fields.
-//
-// Example:
-//
-//	trace.Generation().
-//	    Metadata(langfuse.JSONObject{"model": "gpt-4", "temperature": 0.7}).
-//	    Create()
-type JSONObject = map[string]any
+// Base types
+type (
+	// JSON is an alias for any, representing any JSON value.
+	JSON = types.JSON
 
-// Time is a custom time type that handles JSON marshaling/unmarshaling.
-// When the time is zero, it marshals to JSON null.
-// Note: The omitempty tag does NOT prevent zero times from being marshaled.
-// If you need true omitempty behavior, use *Time (pointer) instead.
-type Time struct {
-	time.Time
-}
+	// JSONObject is an alias for map[string]any, representing a JSON object.
+	JSONObject = types.JSONObject
 
-// IsZero returns true if the time is the zero value.
-// This method is used by encoding/json for omitempty checks in Go 1.18+.
-func (t Time) IsZero() bool {
-	return t.Time.IsZero()
-}
+	// Time is a custom time type that handles JSON marshaling/unmarshaling.
+	Time = types.Time
 
-// MarshalJSON implements json.Marshaler.
-// Zero times are marshaled as JSON null.
-func (t Time) MarshalJSON() ([]byte, error) {
-	if t.Time.IsZero() {
-		return []byte("null"), nil
-	}
-	return json.Marshal(t.Time.Format(time.RFC3339Nano))
-}
+	// Metadata provides type-safe metadata storage with JSON serialization.
+	Metadata = types.Metadata
+)
 
-// TimePtr returns a pointer to a Time value.
-// Use this when you need true omitempty behavior with JSON marshaling.
-func TimePtr(t time.Time) *Time {
-	return &Time{Time: t}
-}
+// Enum types
+type (
+	// ObservationType represents the type of observation.
+	ObservationType = types.ObservationType
 
-// TimeNow returns a pointer to the current time.
-// Convenience function for TimePtr(time.Now()).
-func TimeNow() *Time {
-	return &Time{Time: time.Now()}
-}
+	// ObservationLevel represents the severity level of an observation.
+	ObservationLevel = types.ObservationLevel
 
-// UnmarshalJSON implements json.Unmarshaler.
-func (t *Time) UnmarshalJSON(data []byte) error {
-	var s string
-	if err := json.Unmarshal(data, &s); err != nil {
-		// Try parsing as a number (Unix timestamp)
-		var ts float64
-		if err := json.Unmarshal(data, &ts); err != nil {
-			return err
-		}
-		t.Time = time.Unix(int64(ts), int64((ts-float64(int64(ts)))*1e9))
-		return nil
-	}
-	if s == "" {
-		return nil
-	}
-	parsed, err := time.Parse(time.RFC3339Nano, s)
-	if err != nil {
-		// Try other formats
-		parsed, err = time.Parse(time.RFC3339, s)
-		if err != nil {
-			parsed, err = time.Parse("2006-01-02T15:04:05.000Z", s)
-			if err != nil {
-				return err
-			}
-		}
-	}
-	t.Time = parsed
-	return nil
-}
+	// ScoreDataType represents the data type of a score.
+	ScoreDataType = types.ScoreDataType
 
-// Now returns the current time as a Time.
-func Now() Time {
-	return Time{Time: time.Now()}
-}
+	// ScoreSource represents the source of a score.
+	ScoreSource = types.ScoreSource
 
-// ObservationType represents the type of observation.
-type ObservationType string
+	// PromptType represents the type of a prompt.
+	PromptType = types.PromptType
+)
+
+// Core types
+type (
+	// Trace represents a trace in Langfuse.
+	Trace = types.Trace
+
+	// Observation represents a span, generation, or event in a trace.
+	Observation = types.Observation
+
+	// Usage represents token usage for a generation.
+	Usage = types.Usage
+
+	// Score represents a score attached to a trace or observation.
+	Score = types.Score
+
+	// Prompt represents a prompt in Langfuse.
+	Prompt = types.Prompt
+
+	// TextPrompt represents a text-based prompt.
+	TextPrompt = types.TextPrompt
+
+	// ChatPrompt represents a chat-based prompt with messages.
+	ChatPrompt = types.ChatPrompt
+
+	// ChatMessage represents a message in a chat prompt.
+	ChatMessage = types.ChatMessage
+
+	// Session represents a session in Langfuse.
+	Session = types.Session
+
+	// Dataset represents a dataset in Langfuse.
+	Dataset = types.Dataset
+
+	// DatasetItem represents an item in a dataset.
+	DatasetItem = types.DatasetItem
+
+	// DatasetRun represents a run against a dataset.
+	DatasetRun = types.DatasetRun
+
+	// DatasetRunItem represents an item in a dataset run.
+	DatasetRunItem = types.DatasetRunItem
+
+	// Model represents a model definition in Langfuse.
+	Model = types.Model
+
+	// Comment represents a comment on a trace, observation, session, or prompt.
+	Comment = types.Comment
+
+	// HealthStatus represents the health status of the Langfuse API.
+	HealthStatus = types.HealthStatus
+)
+
+// ============================================================================
+// Observation Type Constants
+// ============================================================================
 
 const (
-	ObservationTypeSpan       ObservationType = "SPAN"
-	ObservationTypeGeneration ObservationType = "GENERATION"
-	ObservationTypeEvent      ObservationType = "EVENT"
+	ObservationTypeSpan       = types.ObservationTypeSpan
+	ObservationTypeGeneration = types.ObservationTypeGeneration
+	ObservationTypeEvent      = types.ObservationTypeEvent
 )
 
-// String returns the string representation of the observation type.
-func (o ObservationType) String() string { return string(o) }
-
-// ObservationLevel represents the severity level of an observation.
-type ObservationLevel string
+// ============================================================================
+// Observation Level Constants
+// ============================================================================
 
 const (
-	ObservationLevelDebug   ObservationLevel = "DEBUG"
-	ObservationLevelDefault ObservationLevel = "DEFAULT"
-	ObservationLevelWarning ObservationLevel = "WARNING"
-	ObservationLevelError   ObservationLevel = "ERROR"
+	ObservationLevelDebug   = types.ObservationLevelDebug
+	ObservationLevelDefault = types.ObservationLevelDefault
+	ObservationLevelWarning = types.ObservationLevelWarning
+	ObservationLevelError   = types.ObservationLevelError
 )
 
-// String returns the string representation of the observation level.
-func (l ObservationLevel) String() string { return string(l) }
-
-// ScoreDataType represents the data type of a score.
-type ScoreDataType string
+// ============================================================================
+// Score Data Type Constants
+// ============================================================================
 
 const (
-	ScoreDataTypeNumeric     ScoreDataType = "NUMERIC"
-	ScoreDataTypeCategorical ScoreDataType = "CATEGORICAL"
-	ScoreDataTypeBoolean     ScoreDataType = "BOOLEAN"
+	ScoreDataTypeNumeric     = types.ScoreDataTypeNumeric
+	ScoreDataTypeCategorical = types.ScoreDataTypeCategorical
+	ScoreDataTypeBoolean     = types.ScoreDataTypeBoolean
 )
 
-// String returns the string representation of the score data type.
-func (s ScoreDataType) String() string { return string(s) }
-
-// ScoreSource represents the source of a score.
-type ScoreSource string
+// ============================================================================
+// Score Source Constants
+// ============================================================================
 
 const (
-	ScoreSourceAPI        ScoreSource = "API"
-	ScoreSourceAnnotation ScoreSource = "ANNOTATION"
-	ScoreSourceEval       ScoreSource = "EVAL"
+	ScoreSourceAPI        = types.ScoreSourceAPI
+	ScoreSourceAnnotation = types.ScoreSourceAnnotation
+	ScoreSourceEval       = types.ScoreSourceEval
 )
 
-// String returns the string representation of the score source.
-func (s ScoreSource) String() string { return string(s) }
+// ============================================================================
+// Prompt Type Constants
+// ============================================================================
 
-// Common environment constants.
-// Use these with the Environment() builder methods for consistency.
 const (
-	EnvProduction  = "production"
-	EnvDevelopment = "development"
-	EnvStaging     = "staging"
-	EnvTest        = "test"
+	PromptTypeText = types.PromptTypeText
+	PromptTypeChat = types.PromptTypeChat
 )
 
-// Common prompt label constants.
-// Use these with GetByLabel() for consistency.
+// ============================================================================
+// Environment Constants
+// ============================================================================
+
 const (
-	LabelProduction  = "production"
-	LabelDevelopment = "development"
-	LabelStaging     = "staging"
-	LabelLatest      = "latest"
+	EnvProduction  = types.EnvProduction
+	EnvDevelopment = types.EnvDevelopment
+	EnvStaging     = types.EnvStaging
+	EnvTest        = types.EnvTest
 )
 
-// Common model name constants.
-// These are provided for convenience and discoverability.
+// ============================================================================
+// Label Constants
+// ============================================================================
+
+const (
+	LabelProduction  = types.LabelProduction
+	LabelDevelopment = types.LabelDevelopment
+	LabelStaging     = types.LabelStaging
+	LabelLatest      = types.LabelLatest
+)
+
+// ============================================================================
+// Model Name Constants
+// ============================================================================
+
 const (
 	// OpenAI models
-	ModelGPT4          = "gpt-4"
-	ModelGPT4Turbo     = "gpt-4-turbo"
-	ModelGPT4o         = "gpt-4o"
-	ModelGPT4oMini     = "gpt-4o-mini"
-	ModelGPT35Turbo    = "gpt-3.5-turbo"
-	ModelO1            = "o1"
-	ModelO1Mini        = "o1-mini"
-	ModelO1Preview     = "o1-preview"
-	ModelO3Mini        = "o3-mini"
-	ModelTextEmbedding = "text-embedding-3-small"
+	ModelGPT4          = types.ModelGPT4
+	ModelGPT4Turbo     = types.ModelGPT4Turbo
+	ModelGPT4o         = types.ModelGPT4o
+	ModelGPT4oMini     = types.ModelGPT4oMini
+	ModelGPT35Turbo    = types.ModelGPT35Turbo
+	ModelO1            = types.ModelO1
+	ModelO1Mini        = types.ModelO1Mini
+	ModelO1Preview     = types.ModelO1Preview
+	ModelO3Mini        = types.ModelO3Mini
+	ModelTextEmbedding = types.ModelTextEmbedding
 
 	// Anthropic models
-	ModelClaude3Opus    = "claude-3-opus"
-	ModelClaude3Sonnet  = "claude-3-sonnet"
-	ModelClaude3Haiku   = "claude-3-haiku"
-	ModelClaude35Sonnet = "claude-3.5-sonnet"
-	ModelClaude35Haiku  = "claude-3.5-haiku"
-	ModelClaude4Opus    = "claude-opus-4"
-	ModelClaude4Sonnet  = "claude-sonnet-4"
+	ModelClaude3Opus    = types.ModelClaude3Opus
+	ModelClaude3Sonnet  = types.ModelClaude3Sonnet
+	ModelClaude3Haiku   = types.ModelClaude3Haiku
+	ModelClaude35Sonnet = types.ModelClaude35Sonnet
+	ModelClaude35Haiku  = types.ModelClaude35Haiku
+	ModelClaude4Opus    = types.ModelClaude4Opus
+	ModelClaude4Sonnet  = types.ModelClaude4Sonnet
 
 	// Google models
-	ModelGeminiPro     = "gemini-pro"
-	ModelGemini15Pro   = "gemini-1.5-pro"
-	ModelGemini15Flash = "gemini-1.5-flash"
-	ModelGemini20Flash = "gemini-2.0-flash"
+	ModelGeminiPro     = types.ModelGeminiPro
+	ModelGemini15Pro   = types.ModelGemini15Pro
+	ModelGemini15Flash = types.ModelGemini15Flash
+	ModelGemini20Flash = types.ModelGemini20Flash
 )
 
-// PromptType represents the type of a prompt.
-type PromptType string
+// ============================================================================
+// Helper Functions - Re-exported from pkg/types
+// ============================================================================
 
+// Now returns the current time as a Time.
+var Now = types.Now
+
+// TimePtr returns a pointer to a Time value.
+var TimePtr = types.TimePtr
+
+// TimeNow returns a pointer to the current time.
+var TimeNow = types.TimeNow
+
+// NewMetadata creates a new empty Metadata instance.
+var NewMetadata = types.NewMetadata
+
+// ============================================================================
+// Re-exports from pkg/config
+// ============================================================================
+
+// Environment helper functions from pkg/config.
+var (
+	// GetEnvString returns the value of an environment variable or a default.
+	GetEnvString = pkgconfig.GetEnvString
+	// GetEnvBool returns true if the env var is "true" or "1".
+	GetEnvBool = pkgconfig.GetEnvBool
+	// GetEnvRegion returns the region from environment or default.
+	GetEnvRegion = pkgconfig.GetEnvRegion
+)
+
+// ============================================================================
+// ID Generation - Re-exported from pkg/id for backward compatibility
+// ============================================================================
+
+// IDGenerationMode controls how IDs are generated when crypto/rand fails.
+type IDGenerationMode = pkgid.IDGenerationMode
+
+// IDGenerator generates unique IDs with configurable failure handling.
+type IDGenerator = pkgid.IDGenerator
+
+// IDGeneratorConfig configures the ID generator.
+type IDGeneratorConfig = pkgid.IDGeneratorConfig
+
+// IDStats contains statistics about ID generation.
+type IDStats = pkgid.IDStats
+
+// ID Generation Mode Constants
 const (
-	PromptTypeText = "text"
-	PromptTypeChat = "chat"
+	// IDModeFallback uses an atomic counter fallback when crypto/rand fails.
+	// This is the default mode for backwards compatibility.
+	IDModeFallback = pkgid.IDModeFallback
+
+	// IDModeStrict returns an error when crypto/rand fails.
+	// Recommended for production deployments where ID uniqueness is critical.
+	IDModeStrict = pkgid.IDModeStrict
 )
 
-// String returns the string representation of the prompt type.
-func (p PromptType) String() string { return string(p) }
+// ID Generation Functions
+var (
+	// NewIDGenerator creates an ID generator with the specified configuration.
+	NewIDGenerator = pkgid.NewIDGenerator
 
-// Trace represents a trace in Langfuse.
-type Trace struct {
-	ID          string   `json:"id"`
-	Timestamp   Time     `json:"timestamp,omitempty"`
-	Name        string   `json:"name,omitempty"`
-	UserID      string   `json:"userId,omitempty"`
-	Input       any      `json:"input,omitempty"`
-	Output      any      `json:"output,omitempty"`
-	Metadata    Metadata `json:"metadata,omitempty"`
-	Tags        []string `json:"tags,omitempty"`
-	SessionID   string   `json:"sessionId,omitempty"`
-	Release     string   `json:"release,omitempty"`
-	Version     string   `json:"version,omitempty"`
-	Public      bool     `json:"public,omitempty"`
-	Environment string   `json:"environment,omitempty"`
+	// GenerateID generates a unique ID using the default generator.
+	// This is the primary entry point for ID generation in the SDK.
+	GenerateID = pkgid.GenerateID
 
-	// Read-only fields returned by the API
-	ProjectID    string  `json:"projectId,omitempty"`
-	CreatedAt    Time    `json:"createdAt,omitempty"`
-	UpdatedAt    Time    `json:"updatedAt,omitempty"`
-	Latency      float64 `json:"latency,omitempty"`
-	TotalCost    float64 `json:"totalCost,omitempty"`
-	InputCost    float64 `json:"inputCost,omitempty"`
-	OutputCost   float64 `json:"outputCost,omitempty"`
-	InputTokens  int     `json:"inputTokens,omitempty"`
-	OutputTokens int     `json:"outputTokens,omitempty"`
-	TotalTokens  int     `json:"totalTokens,omitempty"`
+	// MustGenerateID generates an ID or panics.
+	// Use only when ID generation must succeed.
+	MustGenerateID = pkgid.MustGenerateID
+
+	// SetDefaultIDGenerator sets the package-level ID generator.
+	// Call this early in application startup to configure ID generation.
+	SetDefaultIDGenerator = pkgid.SetDefaultIDGenerator
+
+	// CryptoFailureCount returns the total number of crypto/rand failures.
+	CryptoFailureCount = pkgid.CryptoFailureCount
+
+	// ResetCryptoFailureCount resets the failure counter (for testing).
+	ResetCryptoFailureCount = pkgid.ResetCryptoFailureCount
+
+	// IsFallbackID returns true if the ID was generated using the fallback method.
+	// Fallback IDs start with "fb-".
+	IsFallbackID = pkgid.IsFallbackID
+)
+
+// generateIDInternal is used internally and maintains backwards compatibility.
+// It never returns an error, using fallback mode implicitly.
+func generateIDInternal() string {
+	return pkgid.GenerateIDInternal()
 }
 
-// Observation represents a span, generation, or event in a trace.
-type Observation struct {
-	ID                  string           `json:"id"`
-	TraceID             string           `json:"traceId,omitempty"`
-	Type                ObservationType  `json:"type"`
-	Name                string           `json:"name,omitempty"`
-	StartTime           Time             `json:"startTime,omitempty"`
-	EndTime             Time             `json:"endTime,omitempty"`
-	CompletionStartTime Time             `json:"completionStartTime,omitempty"`
-	Metadata            Metadata         `json:"metadata,omitempty"`
-	Level               ObservationLevel `json:"level,omitempty"`
-	StatusMessage       string           `json:"statusMessage,omitempty"`
-	ParentObservationID string           `json:"parentObservationId,omitempty"`
-	Version             string           `json:"version,omitempty"`
-	Input               any              `json:"input,omitempty"`
-	Output              any              `json:"output,omitempty"`
-	Environment         string           `json:"environment,omitempty"`
+// ============================================================================
+// Error Types - Re-exported from pkg/errors for backward compatibility
+// ============================================================================
 
-	// Generation-specific fields
-	Model           string         `json:"model,omitempty"`
-	ModelParameters map[string]any `json:"modelParameters,omitempty"`
-	Usage           *Usage         `json:"usage,omitempty"`
-	PromptName      string         `json:"promptName,omitempty"`
-	PromptVersion   int            `json:"promptVersion,omitempty"`
+// Error code types
+type (
+	// ErrorCode represents a category of error for metrics and logging.
+	ErrorCode = pkgerrors.ErrorCode
+)
 
-	// Read-only fields
-	ProjectID            string  `json:"projectId,omitempty"`
-	CreatedAt            Time    `json:"createdAt,omitempty"`
-	UpdatedAt            Time    `json:"updatedAt,omitempty"`
-	Latency              float64 `json:"latency,omitempty"`
-	TimeToFirstToken     float64 `json:"timeToFirstToken,omitempty"`
-	TotalCost            float64 `json:"totalCost,omitempty"`
-	InputCost            float64 `json:"inputCost,omitempty"`
-	OutputCost           float64 `json:"outputCost,omitempty"`
-	CalculatedTotalCost  float64 `json:"calculatedTotalCost,omitempty"`
-	CalculatedInputCost  float64 `json:"calculatedInputCost,omitempty"`
-	CalculatedOutputCost float64 `json:"calculatedOutputCost,omitempty"`
+// Error code constants
+const (
+	ErrCodeConfig       = pkgerrors.ErrCodeConfig
+	ErrCodeValidation   = pkgerrors.ErrCodeValidation
+	ErrCodeNetwork      = pkgerrors.ErrCodeNetwork
+	ErrCodeAPI          = pkgerrors.ErrCodeAPI
+	ErrCodeAuth         = pkgerrors.ErrCodeAuth
+	ErrCodeRateLimit    = pkgerrors.ErrCodeRateLimit
+	ErrCodeTimeout      = pkgerrors.ErrCodeTimeout
+	ErrCodeInternal     = pkgerrors.ErrCodeInternal
+	ErrCodeShutdown     = pkgerrors.ErrCodeShutdown
+	ErrCodeBackpressure = pkgerrors.ErrCodeBackpressure
+)
+
+// Error types
+type (
+	// LangfuseError is the common interface for all SDK errors.
+	LangfuseError = pkgerrors.LangfuseError
+
+	// CodedError is an interface for errors that have an error code.
+	CodedError = pkgerrors.CodedError
+
+	// APIError represents an error response from the Langfuse API.
+	APIError = pkgerrors.APIError
+
+	// ValidationError represents a validation error for a request.
+	ValidationError = pkgerrors.ValidationError
+
+	// ShutdownError represents an error that occurred during client shutdown.
+	ShutdownError = pkgerrors.ShutdownError
+
+	// CompilationError represents errors during prompt compilation.
+	CompilationError = pkgerrors.CompilationError
+
+	// IngestionError represents an error that occurred during batch ingestion.
+	IngestionError = pkgerrors.IngestionError
+
+	// IngestionResult represents the result of a batch ingestion request.
+	IngestionResult = pkgerrors.IngestionResult
+
+	// IngestionSuccess represents a successful ingestion event.
+	IngestionSuccess = pkgerrors.IngestionSuccess
+)
+
+// Async error types
+type (
+	// AsyncErrorOperation identifies the type of async operation that failed.
+	AsyncErrorOperation = pkgerrors.AsyncErrorOperation
+
+	// AsyncError represents an error that occurred in background processing.
+	AsyncError = pkgerrors.AsyncError
+
+	// AsyncErrorHandler provides structured async error handling.
+	AsyncErrorHandler = pkgerrors.AsyncErrorHandler
+
+	// AsyncErrorConfig configures the AsyncErrorHandler.
+	AsyncErrorConfig = pkgerrors.AsyncErrorConfig
+
+	// AsyncErrorStats contains statistics about async error handling.
+	AsyncErrorStats = pkgerrors.AsyncErrorStats
+)
+
+// Async operation constants
+const (
+	AsyncOpBatchSend = pkgerrors.AsyncOpBatchSend
+	AsyncOpFlush     = pkgerrors.AsyncOpFlush
+	AsyncOpHook      = pkgerrors.AsyncOpHook
+	AsyncOpShutdown  = pkgerrors.AsyncOpShutdown
+	AsyncOpQueue     = pkgerrors.AsyncOpQueue
+	AsyncOpInternal  = pkgerrors.AsyncOpInternal
+)
+
+// ============================================================================
+// Sentinel Errors - Re-exported from pkg/errors
+// ============================================================================
+
+// Configuration validation errors
+var (
+	ErrMissingPublicKey = pkgerrors.ErrMissingPublicKey
+	ErrMissingSecretKey = pkgerrors.ErrMissingSecretKey
+	ErrMissingBaseURL   = pkgerrors.ErrMissingBaseURL
+	ErrInvalidConfig    = pkgerrors.ErrInvalidConfig
+	ErrClientClosed     = pkgerrors.ErrClientClosed
+	ErrNilRequest       = pkgerrors.ErrNilRequest
+)
+
+// Common scenario errors
+var (
+	ErrPromptNotFound   = pkgerrors.ErrPromptNotFound
+	ErrDatasetNotFound  = pkgerrors.ErrDatasetNotFound
+	ErrTraceNotFound    = pkgerrors.ErrTraceNotFound
+	ErrEmptyBatch       = pkgerrors.ErrEmptyBatch
+	ErrBatchTooLarge    = pkgerrors.ErrBatchTooLarge
+	ErrContextCancelled = pkgerrors.ErrContextCancelled
+	ErrShutdownTimeout  = pkgerrors.ErrShutdownTimeout
+)
+
+// Sentinel APIError values for use with errors.Is().
+var (
+	ErrNotFound     = pkgerrors.ErrNotFound
+	ErrUnauthorized = pkgerrors.ErrUnauthorized
+	ErrForbidden    = pkgerrors.ErrForbidden
+	ErrRateLimited  = pkgerrors.ErrRateLimited
+)
+
+// ============================================================================
+// Error Constructor Functions - Re-exported from pkg/errors
+// ============================================================================
+
+// NewValidationError creates a new validation error.
+var NewValidationError = pkgerrors.NewValidationError
+
+// NewValidationErrorWithCause creates a new validation error with an underlying cause.
+var NewValidationErrorWithCause = pkgerrors.NewValidationErrorWithCause
+
+// NewAsyncError creates a new async error.
+var NewAsyncError = pkgerrors.NewAsyncError
+
+// NewAsyncErrorHandler creates a new async error handler.
+var NewAsyncErrorHandler = pkgerrors.NewAsyncErrorHandler
+
+// WrapAsyncError wraps an error in an AsyncError if it isn't already.
+var WrapAsyncError = pkgerrors.WrapAsyncError
+
+// ============================================================================
+// Error Helper Functions
+// ============================================================================
+
+// IsRetryable returns true if the error represents a retryable condition.
+// This works with any error type in the SDK.
+//
+// Retryable conditions include:
+//   - Rate limiting (429)
+//   - Server errors (5xx)
+//   - Network timeouts
+//   - Circuit breaker open (may close soon)
+//
+// Example:
+//
+//	if langfuse.IsRetryable(err) {
+//	    time.Sleep(langfuse.RetryAfter(err))
+//	    // Retry the operation
+//	}
+func IsRetryable(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	// Check if error implements LangfuseError
+	var langfuseErr LangfuseError
+	if errors.As(err, &langfuseErr) {
+		return langfuseErr.IsRetryable()
+	}
+
+	// Check specific error types
+	if apiErr, ok := AsAPIError(err); ok {
+		return apiErr.IsRetryable()
+	}
+
+	// Network errors are generally retryable
+	// Note: ErrCircuitOpen is defined in http.go
+	if errors.Is(err, ErrCircuitOpen) {
+		return true
+	}
+
+	return false
 }
 
-// Usage represents token usage for a generation.
-type Usage struct {
-	Input      int     `json:"input,omitempty"`
-	Output     int     `json:"output,omitempty"`
-	Total      int     `json:"total,omitempty"`
-	Unit       string  `json:"unit,omitempty"`
-	InputCost  float64 `json:"inputCost,omitempty"`
-	OutputCost float64 `json:"outputCost,omitempty"`
-	TotalCost  float64 `json:"totalCost,omitempty"`
+// AsAPIError extracts an APIError from the error chain.
+// Returns the APIError and true if found, nil and false otherwise.
+// This follows Go's errors.As() convention.
+//
+// Example:
+//
+//	if apiErr, ok := langfuse.AsAPIError(err); ok {
+//	    log.Printf("API error %d: %s", apiErr.StatusCode, apiErr.Message)
+//	}
+func AsAPIError(err error) (*APIError, bool) {
+	return pkgerrors.AsAPIError(err)
 }
 
-// Score represents a score attached to a trace or observation.
-type Score struct {
-	ID            string        `json:"id,omitempty"`
-	TraceID       string        `json:"traceId"`
-	ObservationID string        `json:"observationId,omitempty"`
-	Name          string        `json:"name"`
-	Value         any           `json:"value"`
-	StringValue   string        `json:"stringValue,omitempty"`
-	DataType      ScoreDataType `json:"dataType,omitempty"`
-	Source        ScoreSource   `json:"source,omitempty"`
-	Comment       string        `json:"comment,omitempty"`
-	ConfigID      string        `json:"configId,omitempty"`
-	Environment   string        `json:"environment,omitempty"`
-	Metadata      Metadata      `json:"metadata,omitempty"`
-
-	// Read-only fields
-	ProjectID    string `json:"projectId,omitempty"`
-	Timestamp    Time   `json:"timestamp,omitempty"`
-	CreatedAt    Time   `json:"createdAt,omitempty"`
-	UpdatedAt    Time   `json:"updatedAt,omitempty"`
-	AuthorUserID string `json:"authorUserId,omitempty"`
+// AsValidationError extracts a ValidationError from the error chain.
+// Returns the ValidationError and true if found, nil and false otherwise.
+// This follows Go's errors.As() convention.
+func AsValidationError(err error) (*ValidationError, bool) {
+	return pkgerrors.AsValidationError(err)
 }
 
-// Prompt represents a prompt in Langfuse.
-type Prompt struct {
-	Name     string         `json:"name"`
-	Version  int            `json:"version,omitempty"`
-	Prompt   any            `json:"prompt"`
-	Type     string         `json:"type,omitempty"`
-	Config   map[string]any `json:"config,omitempty"`
-	Labels   []string       `json:"labels,omitempty"`
-	Tags     []string       `json:"tags,omitempty"`
-	IsActive bool           `json:"isActive,omitempty"`
-
-	// Read-only fields
-	ID        string `json:"id,omitempty"`
-	ProjectID string `json:"projectId,omitempty"`
-	CreatedAt Time   `json:"createdAt,omitempty"`
-	UpdatedAt Time   `json:"updatedAt,omitempty"`
-	CreatedBy string `json:"createdBy,omitempty"`
+// AsIngestionError extracts an IngestionError from the error chain.
+// Returns the IngestionError and true if found, nil and false otherwise.
+// This follows Go's errors.As() convention.
+func AsIngestionError(err error) (*IngestionError, bool) {
+	return pkgerrors.AsIngestionError(err)
 }
 
-// TextPrompt represents a text-based prompt.
-type TextPrompt struct {
-	Prompt
+// AsShutdownError extracts a ShutdownError from the error chain.
+// Returns the ShutdownError and true if found, nil and false otherwise.
+// This follows Go's errors.As() convention.
+func AsShutdownError(err error) (*ShutdownError, bool) {
+	return pkgerrors.AsShutdownError(err)
 }
 
-// ChatPrompt represents a chat-based prompt with messages.
-type ChatPrompt struct {
-	Prompt
-	Messages []ChatMessage `json:"prompt"`
+// AsCompilationError extracts a CompilationError from the error chain.
+// Returns the CompilationError and true if found, nil and false otherwise.
+// This follows Go's errors.As() convention.
+// Also handles types.CompilationError from pkg/types.
+func AsCompilationError(err error) (*CompilationError, bool) {
+	var compErr *CompilationError
+	if errors.As(err, &compErr) {
+		return compErr, true
+	}
+	// Also check for types.CompilationError (returned by Prompt.Compile methods)
+	var typesCompErr *types.CompilationError
+	if errors.As(err, &typesCompErr) {
+		// Convert to root CompilationError for backward compatibility
+		return &CompilationError{Errors: typesCompErr.Errors}, true
+	}
+	return nil, false
 }
 
-// ChatMessage represents a message in a chat prompt.
-type ChatMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+// AsAsyncError extracts an AsyncError from the error chain.
+// Returns the AsyncError and true if found, nil and false otherwise.
+// This follows Go's errors.As() convention.
+func AsAsyncError(err error) (*AsyncError, bool) {
+	return pkgerrors.AsAsyncError(err)
 }
 
-// Session represents a session in Langfuse.
-type Session struct {
-	ID        string `json:"id"`
-	CreatedAt Time   `json:"createdAt,omitempty"`
-	ProjectID string `json:"projectId,omitempty"`
+// RetryAfter returns the suggested retry delay from a rate limit error.
+// Returns 0 if the error is not a rate limit error or has no Retry-After hint.
+func RetryAfter(err error) time.Duration {
+	if apiErr, ok := AsAPIError(err); ok {
+		return apiErr.RetryAfter
+	}
+	return 0
 }
 
-// Dataset represents a dataset in Langfuse.
-type Dataset struct {
-	ID          string   `json:"id,omitempty"`
-	Name        string   `json:"name"`
-	Description string   `json:"description,omitempty"`
-	Metadata    Metadata `json:"metadata,omitempty"`
+// ErrorCodeOf returns the error code for an error.
+// It checks if the error implements CodedError, then falls back to
+// inferring the code from the error type.
+func ErrorCodeOf(err error) ErrorCode {
+	if err == nil {
+		return ""
+	}
 
-	// Read-only fields
-	ProjectID string `json:"projectId,omitempty"`
-	CreatedAt Time   `json:"createdAt,omitempty"`
-	UpdatedAt Time   `json:"updatedAt,omitempty"`
+	// Check if error implements CodedError
+	var coded CodedError
+	if errors.As(err, &coded) {
+		return coded.Code()
+	}
+
+	// Infer code from error type
+	switch {
+	case errors.Is(err, ErrMissingPublicKey),
+		errors.Is(err, ErrMissingSecretKey),
+		errors.Is(err, ErrMissingBaseURL),
+		errors.Is(err, ErrInvalidConfig):
+		return ErrCodeConfig
+
+	case errors.Is(err, ErrClientClosed),
+		errors.Is(err, ErrShutdownTimeout):
+		return ErrCodeShutdown
+
+	case errors.Is(err, ErrContextCancelled):
+		return ErrCodeTimeout
+
+	case errors.Is(err, ErrCircuitOpen):
+		return ErrCodeNetwork
+	}
+
+	// Check for API errors
+	if apiErr, ok := AsAPIError(err); ok {
+		switch {
+		case apiErr.IsUnauthorized(), apiErr.IsForbidden():
+			return ErrCodeAuth
+		case apiErr.IsRateLimited():
+			return ErrCodeRateLimit
+		default:
+			return ErrCodeAPI
+		}
+	}
+
+	// Check for validation errors
+	if _, ok := AsValidationError(err); ok {
+		return ErrCodeValidation
+	}
+
+	// Check for shutdown errors
+	if _, ok := AsShutdownError(err); ok {
+		return ErrCodeShutdown
+	}
+
+	return ErrCodeInternal
 }
 
-// DatasetItem represents an item in a dataset.
-type DatasetItem struct {
-	ID                  string   `json:"id,omitempty"`
-	DatasetName         string   `json:"datasetName,omitempty"`
-	Input               any      `json:"input,omitempty"`
-	ExpectedOutput      any      `json:"expectedOutput,omitempty"`
-	Metadata            Metadata `json:"metadata,omitempty"`
-	SourceTraceID       string   `json:"sourceTraceId,omitempty"`
-	SourceObservationID string   `json:"sourceObservationId,omitempty"`
-	Status              string   `json:"status,omitempty"`
-
-	// Read-only fields
-	DatasetID string `json:"datasetId,omitempty"`
-	ProjectID string `json:"projectId,omitempty"`
-	CreatedAt Time   `json:"createdAt,omitempty"`
-	UpdatedAt Time   `json:"updatedAt,omitempty"`
+// WrapError wraps an error with additional context.
+// It returns nil if err is nil.
+//
+// Example:
+//
+//	if err := doSomething(); err != nil {
+//	    return langfuse.WrapError(err, "failed to process trace")
+//	}
+func WrapError(err error, message string) error {
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("langfuse: %s: %w", message, err)
 }
 
-// DatasetRun represents a run against a dataset.
-type DatasetRun struct {
-	ID          string   `json:"id,omitempty"`
-	Name        string   `json:"name"`
-	Description string   `json:"description,omitempty"`
-	Metadata    Metadata `json:"metadata,omitempty"`
-	DatasetID   string   `json:"datasetId,omitempty"`
-	DatasetName string   `json:"datasetName,omitempty"`
-
-	// Read-only fields
-	ProjectID string `json:"projectId,omitempty"`
-	CreatedAt Time   `json:"createdAt,omitempty"`
-	UpdatedAt Time   `json:"updatedAt,omitempty"`
+// WrapErrorf wraps an error with a formatted message.
+// It returns nil if err is nil.
+//
+// Example:
+//
+//	if err := doSomething(id); err != nil {
+//	    return langfuse.WrapErrorf(err, "failed to process trace %s", id)
+//	}
+func WrapErrorf(err error, format string, args ...any) error {
+	if err == nil {
+		return nil
+	}
+	message := fmt.Sprintf(format, args...)
+	return fmt.Errorf("langfuse: %s: %w", message, err)
 }
 
-// DatasetRunItem represents an item in a dataset run.
-type DatasetRunItem struct {
-	ID             string `json:"id,omitempty"`
-	DatasetRunID   string `json:"datasetRunId,omitempty"`
-	DatasetRunName string `json:"datasetRunName,omitempty"`
-	DatasetItemID  string `json:"datasetItemId,omitempty"`
-	TraceID        string `json:"traceId,omitempty"`
-	ObservationID  string `json:"observationId,omitempty"`
-
-	// Read-only fields
-	ProjectID string `json:"projectId,omitempty"`
-	CreatedAt Time   `json:"createdAt,omitempty"`
-	UpdatedAt Time   `json:"updatedAt,omitempty"`
+// Deprecated: IsShutdownError is deprecated, use AsShutdownError instead.
+func IsShutdownError(err error) (*ShutdownError, bool) {
+	return AsShutdownError(err)
 }
 
-// Model represents a model definition in Langfuse.
-type Model struct {
-	ID              string         `json:"id,omitempty"`
-	ModelName       string         `json:"modelName"`
-	MatchPattern    string         `json:"matchPattern,omitempty"`
-	StartDate       Time           `json:"startDate,omitempty"`
-	InputPrice      float64        `json:"inputPrice,omitempty"`
-	OutputPrice     float64        `json:"outputPrice,omitempty"`
-	TotalPrice      float64        `json:"totalPrice,omitempty"`
-	Unit            string         `json:"unit,omitempty"`
-	Tokenizer       string         `json:"tokenizer,omitempty"`
-	TokenizerConfig map[string]any `json:"tokenizerConfig,omitempty"`
-
-	// Read-only fields
-	ProjectID         string `json:"projectId,omitempty"`
-	IsLangfuseManaged bool   `json:"isLangfuseManaged,omitempty"`
-	CreatedAt         Time   `json:"createdAt,omitempty"`
-	UpdatedAt         Time   `json:"updatedAt,omitempty"`
-}
-
-// Comment represents a comment on a trace, observation, session, or prompt.
-type Comment struct {
-	ID           string `json:"id,omitempty"`
-	ObjectType   string `json:"objectType"`
-	ObjectID     string `json:"objectId"`
-	Content      string `json:"content"`
-	AuthorUserID string `json:"authorUserId,omitempty"`
-
-	// Read-only fields
-	ProjectID string `json:"projectId,omitempty"`
-	CreatedAt Time   `json:"createdAt,omitempty"`
-	UpdatedAt Time   `json:"updatedAt,omitempty"`
-}
-
-// HealthStatus represents the health status of the Langfuse API.
-type HealthStatus struct {
-	Status  string `json:"status"`
-	Version string `json:"version,omitempty"`
-	Message string `json:"message,omitempty"`
+// Deprecated: IsCompilationError is deprecated, use AsCompilationError instead.
+func IsCompilationError(err error) (*CompilationError, bool) {
+	return AsCompilationError(err)
 }

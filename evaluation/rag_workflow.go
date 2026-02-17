@@ -117,7 +117,7 @@ func (r *RAGWorkflow) Retrieve(ctx context.Context, retrieveFunc RetrieveFunc) (
 	docs, err := retrieveFunc()
 	if err != nil {
 		// End span with error
-		span.Update().
+		_ = span.Update().
 			Level(langfuse.ObservationLevelError).
 			StatusMessage(err.Error()).
 			EndTime(time.Now()).
@@ -138,7 +138,7 @@ func (r *RAGWorkflow) Retrieve(ctx context.Context, retrieveFunc RetrieveFunc) (
 		},
 	}
 
-	span.Update().Output(output).EndTime(time.Now()).Apply(ctx)
+	_ = span.Update().Output(output).EndTime(time.Now()).Apply(ctx)
 
 	return docs, nil
 }
@@ -163,7 +163,7 @@ func (r *RAGWorkflow) RetrieveWithScores(ctx context.Context, retrieveFunc Retri
 	// Execute retrieval
 	docs, scores, err := retrieveFunc()
 	if err != nil {
-		span.Update().
+		_ = span.Update().
 			Level(langfuse.ObservationLevelError).
 			StatusMessage(err.Error()).
 			EndTime(time.Now()).
@@ -186,7 +186,7 @@ func (r *RAGWorkflow) RetrieveWithScores(ctx context.Context, retrieveFunc Retri
 		},
 	}
 
-	span.Update().Output(output).EndTime(time.Now()).Apply(ctx)
+	_ = span.Update().Output(output).EndTime(time.Now()).Apply(ctx)
 
 	return docs, scores, nil
 }
@@ -221,7 +221,7 @@ func (r *RAGWorkflow) Generate(ctx context.Context, model string, generateFunc G
 	// Execute generation
 	output, inputTokens, outputTokens, err := generateFunc(r.query, r.retrievedDocs)
 	if err != nil {
-		gen.Update().
+		_ = gen.Update().
 			Level(langfuse.ObservationLevelError).
 			StatusMessage(err.Error()).
 			EndTime(time.Now()).
@@ -253,7 +253,7 @@ func (r *RAGWorkflow) Generate(ctx context.Context, model string, generateFunc G
 	return output, nil
 }
 
-// GenerateWithCitations executes generation and extracts citations.
+// GenerateWithCitationsFunc executes generation and extracts citations.
 type GenerateWithCitationsFunc func(query string, context []string) (output string, citations []string, inputTokens, outputTokens int, err error)
 
 // GenerateWithCitations executes a generation that also returns citations.
@@ -278,7 +278,7 @@ func (r *RAGWorkflow) GenerateWithCitations(ctx context.Context, model string, g
 	// Execute generation
 	output, citations, inputTokens, outputTokens, err := generateFunc(r.query, r.retrievedDocs)
 	if err != nil {
-		gen.Update().
+		_ = gen.Update().
 			Level(langfuse.ObservationLevelError).
 			StatusMessage(err.Error()).
 			EndTime(time.Now()).
