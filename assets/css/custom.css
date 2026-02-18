@@ -1,0 +1,62 @@
+/* ============================================
+   Langfuse Go SDK - Spacing & Layout Overrides
+
+   Fixes spacing inconsistencies in the default
+   Hextra theme to establish a consistent 8px
+   grid rhythm throughout the site.
+   ============================================ */
+
+/* -------------------------------------------
+   Homepage: Feature Grid
+   ------------------------------------------- */
+
+/* Increase card gap from 16px to 24px.
+   The default gap-4 (16px) is narrower than the
+   cards' border-radius (24px from rounded-3xl),
+   creating a visually pinched appearance. */
+.hextra-feature-grid {
+  gap: 1.5rem;
+}
+
+/* -------------------------------------------
+   Documentation Pages: Article Spacing
+   ------------------------------------------- */
+
+/* Increase top padding on doc article main area.
+   Default pt-4 (16px) places the breadcrumb too
+   close to the navbar. */
+article > main {
+  padding-top: 1.5rem;
+}
+
+@media (min-width: 768px) {
+  article > main {
+    padding-top: 2rem;
+  }
+}
+
+/* Separate the breadcrumb from the page title.
+   Without this, the h1 crowds the breadcrumb trail. */
+.content > h1:first-child {
+  margin-top: 1.5rem;
+}
+
+/* -------------------------------------------
+   Documentation Pages: Content Block Spacing
+   ------------------------------------------- */
+
+/* Code blocks need more vertical breathing room.
+   Default prose margins create only ~16px between
+   a paragraph and its code example. 24px is the
+   minimum for scannable documentation. */
+.content pre {
+  margin-top: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+/* Callout/admonition boxes should stand out from
+   surrounding prose with additional separation. */
+.hextra-callout {
+  margin-top: 1.5rem;
+  margin-bottom: 1.5rem;
+}

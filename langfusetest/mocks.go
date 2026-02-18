@@ -10,8 +10,8 @@ import (
 // Compile-time interface assertions to catch drift between mock implementations
 // and the actual interfaces they're supposed to implement.
 var (
-	_ langfuse.Metrics = (*MockMetrics)(nil)
-	_ langfuse.Logger  = (*MockLogger)(nil)
+	_ langfuse.Metrics          = (*MockMetrics)(nil)
+	_ langfuse.StructuredLogger = (*MockLogger)(nil)
 )
 
 // MockMetrics is a mock implementation of the Metrics interface for testing.
@@ -83,7 +83,7 @@ func (m *MockMetrics) Reset() {
 	m.Timings = make(map[string][]int64)
 }
 
-// MockLogger is a mock implementation of the Logger interface for testing.
+// MockLogger is a mock implementation of the StructuredLogger interface for testing.
 // It captures all log messages for later verification.
 type MockLogger struct {
 	mu       sync.Mutex
@@ -97,11 +97,32 @@ func NewMockLogger() *MockLogger {
 	}
 }
 
-// Printf implements Logger.Printf.
-func (l *MockLogger) Printf(format string, v ...any) {
+// Debug implements StructuredLogger.Debug.
+func (l *MockLogger) Debug(msg string, args ...any) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	l.Messages = append(l.Messages, format)
+	l.Messages = append(l.Messages, msg)
+}
+
+// Info implements StructuredLogger.Info.
+func (l *MockLogger) Info(msg string, args ...any) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.Messages = append(l.Messages, msg)
+}
+
+// Warn implements StructuredLogger.Warn.
+func (l *MockLogger) Warn(msg string, args ...any) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.Messages = append(l.Messages, msg)
+}
+
+// Error implements StructuredLogger.Error.
+func (l *MockLogger) Error(msg string, args ...any) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.Messages = append(l.Messages, msg)
 }
 
 // GetMessages returns all logged messages.

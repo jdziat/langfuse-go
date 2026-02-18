@@ -78,13 +78,13 @@ func TestPromptsClientGet(t *testing.T) {
 	}
 
 	// Test GetByVersion
-	prompt, err = client.Prompts().GetByVersion(context.Background(), "my-prompt", 2)
+	_, err = client.Prompts().GetByVersion(context.Background(), "my-prompt", 2)
 	if err != nil {
 		t.Fatalf("GetByVersion failed: %v", err)
 	}
 
 	// Test GetByLabel
-	prompt, err = client.Prompts().GetByLabel(context.Background(), "my-prompt", "production")
+	_, err = client.Prompts().GetByLabel(context.Background(), "my-prompt", "production")
 	if err != nil {
 		t.Fatalf("GetByLabel failed: %v", err)
 	}
@@ -367,7 +367,7 @@ func TestPromptCompileChatMessagesWithErrors(t *testing.T) {
 			t.Error("Expected CompilationError for invalid message type")
 		}
 
-		compErr, ok := langfuse.IsCompilationError(err)
+		compErr, ok := langfuse.AsCompilationError(err)
 		if !ok {
 			t.Errorf("Expected CompilationError, got %T", err)
 		}
@@ -394,7 +394,7 @@ func TestPromptCompileChatMessagesWithErrors(t *testing.T) {
 			t.Error("Expected CompilationError for missing role")
 		}
 
-		compErr, ok := langfuse.IsCompilationError(err)
+		compErr, ok := langfuse.AsCompilationError(err)
 		if !ok {
 			t.Errorf("Expected CompilationError, got %T", err)
 		}
@@ -424,7 +424,7 @@ func TestPromptCompileChatMessagesWithErrors(t *testing.T) {
 			t.Error("Expected CompilationError for missing content")
 		}
 
-		compErr, ok := langfuse.IsCompilationError(err)
+		compErr, ok := langfuse.AsCompilationError(err)
 		if !ok {
 			t.Errorf("Expected CompilationError, got %T", err)
 		}
@@ -456,7 +456,7 @@ func TestPromptCompileChatMessagesWithErrors(t *testing.T) {
 			t.Error("Expected CompilationError")
 		}
 
-		compErr, ok := langfuse.IsCompilationError(err)
+		compErr, ok := langfuse.AsCompilationError(err)
 		if !ok {
 			t.Errorf("Expected CompilationError, got %T", err)
 		}

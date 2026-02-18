@@ -1,4 +1,7 @@
-# Migration Guide
+---
+title: Migration Guide
+weight: 6
+---
 
 This guide helps you migrate to the latest version of the Langfuse Go SDK.
 
@@ -473,14 +476,14 @@ func main() {
 
 If you encounter issues during migration:
 
-1. **Check the documentation**: [Getting Started Guide](getting-started.md)
-2. **Review examples**: [API Reference](api-reference.md)
+1. **Check the documentation**: [Getting Started Guide](../getting-started/)
+2. **Review examples**: [API Reference](../api-reference/)
 3. **Open an issue**: [GitHub Issues](https://github.com/jdziat/langfuse-go/issues)
 4. **Ask the community**: [Langfuse Discord](https://langfuse.com/discord)
 
 ## Next Steps
 
-- [Getting Started](getting-started.md) - Learn the new API
-- [Configuration](configuration.md) - Optimize your setup
-- [Tracing Guide](tracing.md) - Master tracing patterns
-- [API Reference](api-reference.md) - Complete type reference
+- [Getting Started](../getting-started/) - Learn the new API
+- [Configuration](../configuration/) - Optimize your setup
+- [Tracing Guide](../tracing/) - Master tracing patterns
+- [API Reference](../api-reference/) - Complete type reference

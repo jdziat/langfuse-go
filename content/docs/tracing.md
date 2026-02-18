@@ -1,4 +1,7 @@
-# Tracing
+---
+title: Tracing
+weight: 3
+---
 
 Langfuse provides comprehensive tracing capabilities for LLM applications. This guide covers all tracing concepts and how to use them effectively.
 
@@ -577,6 +580,6 @@ trace.Event(langfuse.EventParams{
 
 ## Next Steps
 
-- [Evaluation Guide](evaluation.md) - Learn about scoring and evaluation
-- [Configuration](configuration.md) - Customize SDK behavior
-- [API Reference](api-reference.md) - Complete type reference
+- [Evaluation Guide](../evaluation/) - Learn about scoring and evaluation
+- [Configuration](../configuration/) - Customize SDK behavior
+- [API Reference](../api-reference/) - Complete type reference

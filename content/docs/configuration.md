@@ -1,4 +1,7 @@
-# Configuration
+---
+title: Configuration
+weight: 2
+---
 
 The Langfuse Go SDK provides flexible configuration options to customize its behavior for your needs.
 
@@ -382,6 +385,6 @@ Common validation errors:
 
 ## Next Steps
 
-- [Tracing Guide](tracing.md) - Learn about traces, spans, and generations
-- [API Reference](api-reference.md) - Complete type reference
-- [Getting Started](getting-started.md) - Basic setup guide
+- [Tracing Guide](../tracing/) - Learn about traces, spans, and generations
+- [API Reference](../api-reference/) - Complete type reference
+- [Getting Started](../getting-started/) - Basic setup guide
