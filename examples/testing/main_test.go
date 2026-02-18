@@ -296,7 +296,7 @@ func TestMockLogger(t *testing.T) {
 
 	// Use logger with client in debug mode
 	client, _ := langfusetest.NewTestClientWithConfig(t,
-		langfuse.WithLogger(logger),
+		langfuse.WithStructuredLogger(logger),
 		langfuse.WithDebug(true),
 	)
 

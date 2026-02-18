@@ -323,23 +323,23 @@ func TestCompilationError(t *testing.T) {
 		}
 	})
 
-	t.Run("IsCompilationError helper", func(t *testing.T) {
+	t.Run("AsCompilationError helper", func(t *testing.T) {
 		err := &langfuse.CompilationError{
 			Errors: []error{langfuse.NewValidationError("test", "test error")},
 		}
 
-		compErr, ok := langfuse.IsCompilationError(err)
+		compErr, ok := langfuse.AsCompilationError(err)
 		if !ok {
-			t.Error("IsCompilationError() should return true for CompilationError")
+			t.Error("AsCompilationError() should return true for CompilationError")
 		}
 		if compErr == nil {
-			t.Error("IsCompilationError() should return the error")
+			t.Error("AsCompilationError() should return the error")
 		}
 
 		// Test with non-CompilationError
-		_, ok = langfuse.IsCompilationError(langfuse.ErrClientClosed)
+		_, ok = langfuse.AsCompilationError(langfuse.ErrClientClosed)
 		if ok {
-			t.Error("IsCompilationError() should return false for non-CompilationError")
+			t.Error("AsCompilationError() should return false for non-CompilationError")
 		}
 	})
 }
@@ -376,15 +376,15 @@ func TestShutdownError(t *testing.T) {
 		}
 	})
 
-	t.Run("IsShutdownError helper", func(t *testing.T) {
+	t.Run("AsShutdownError helper", func(t *testing.T) {
 		err := &langfuse.ShutdownError{Message: "test"}
 
-		shutdownErr, ok := langfuse.IsShutdownError(err)
+		shutdownErr, ok := langfuse.AsShutdownError(err)
 		if !ok {
-			t.Error("IsShutdownError() should return true for ShutdownError")
+			t.Error("AsShutdownError() should return true for ShutdownError")
 		}
 		if shutdownErr == nil {
-			t.Error("IsShutdownError() should return the error")
+			t.Error("AsShutdownError() should return the error")
 		}
 	})
 }
@@ -430,10 +430,10 @@ func TestAsAPIError(t *testing.T) {
 		err := &langfuse.APIError{StatusCode: 404, Message: "Not found"}
 		apiErr, ok := langfuse.AsAPIError(err)
 		if !ok {
-			t.Error("AsAPIError() should return true for APIError")
+			t.Fatal("AsAPIError() should return true for APIError")
 		}
 		if apiErr == nil {
-			t.Error("AsAPIError() should return the error")
+			t.Fatal("AsAPIError() should return the error")
 		}
 		if apiErr.StatusCode != 404 {
 			t.Errorf("StatusCode = %d, want 404", apiErr.StatusCode)
@@ -466,10 +466,10 @@ func TestAsValidationError(t *testing.T) {
 		err := langfuse.NewValidationError("field", "is required")
 		valErr, ok := langfuse.AsValidationError(err)
 		if !ok {
-			t.Error("AsValidationError() should return true for ValidationError")
+			t.Fatal("AsValidationError() should return true for ValidationError")
 		}
 		if valErr == nil {
-			t.Error("AsValidationError() should return the error")
+			t.Fatal("AsValidationError() should return the error")
 		}
 		if valErr.Field != "field" {
 			t.Errorf("Field = %s, want 'field'", valErr.Field)
@@ -492,10 +492,10 @@ func TestAsIngestionError(t *testing.T) {
 		err := &langfuse.IngestionError{ID: "event-1", Status: 400, Message: "Bad request"}
 		ingErr, ok := langfuse.AsIngestionError(err)
 		if !ok {
-			t.Error("AsIngestionError() should return true for IngestionError")
+			t.Fatal("AsIngestionError() should return true for IngestionError")
 		}
 		if ingErr == nil {
-			t.Error("AsIngestionError() should return the error")
+			t.Fatal("AsIngestionError() should return the error")
 		}
 		if ingErr.ID != "event-1" {
 			t.Errorf("ID = %s, want 'event-1'", ingErr.ID)
@@ -518,10 +518,10 @@ func TestAsShutdownError(t *testing.T) {
 		err := &langfuse.ShutdownError{PendingEvents: 10, Message: "timeout"}
 		shutdownErr, ok := langfuse.AsShutdownError(err)
 		if !ok {
-			t.Error("AsShutdownError() should return true for ShutdownError")
+			t.Fatal("AsShutdownError() should return true for ShutdownError")
 		}
 		if shutdownErr == nil {
-			t.Error("AsShutdownError() should return the error")
+			t.Fatal("AsShutdownError() should return the error")
 		}
 		if shutdownErr.PendingEvents != 10 {
 			t.Errorf("PendingEvents = %d, want 10", shutdownErr.PendingEvents)
@@ -544,10 +544,10 @@ func TestAsCompilationError(t *testing.T) {
 		err := &langfuse.CompilationError{Errors: []error{langfuse.NewValidationError("test", "error")}}
 		compErr, ok := langfuse.AsCompilationError(err)
 		if !ok {
-			t.Error("AsCompilationError() should return true for CompilationError")
+			t.Fatal("AsCompilationError() should return true for CompilationError")
 		}
 		if compErr == nil {
-			t.Error("AsCompilationError() should return the error")
+			t.Fatal("AsCompilationError() should return the error")
 		}
 		if len(compErr.Errors) != 1 {
 			t.Errorf("Errors length = %d, want 1", len(compErr.Errors))

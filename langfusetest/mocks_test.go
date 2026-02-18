@@ -105,8 +105,8 @@ func TestMockMetrics_ReturnsCopy(t *testing.T) {
 func TestMockLogger_Messages(t *testing.T) {
 	l := NewMockLogger()
 
-	l.Printf("message 1")
-	l.Printf("message 2 with %d args", 1)
+	l.Info("message 1")
+	l.Info("message 2 with %d args", 1)
 
 	if l.MessageCount() != 2 {
 		t.Errorf("MessageCount() = %d, want 2", l.MessageCount())
@@ -124,8 +124,8 @@ func TestMockLogger_Messages(t *testing.T) {
 func TestMockLogger_Reset(t *testing.T) {
 	l := NewMockLogger()
 
-	l.Printf("test")
-	l.Printf("test")
+	l.Info("test")
+	l.Info("test")
 
 	l.Reset()
 
@@ -137,7 +137,7 @@ func TestMockLogger_Reset(t *testing.T) {
 func TestMockLogger_ReturnsCopy(t *testing.T) {
 	l := NewMockLogger()
 
-	l.Printf("original")
+	l.Info("original")
 
 	messages := l.GetMessages()
 	messages[0] = "modified"

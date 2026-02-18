@@ -125,7 +125,7 @@ func TestEventPersistence_LoadNonExistent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
-	if events != nil && len(events) != 0 {
+	if len(events) != 0 {
 		t.Error("Load() should return nil or empty for non-existent directory")
 	}
 }

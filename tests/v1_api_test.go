@@ -295,10 +295,10 @@ func TestV1ScorerInterface(t *testing.T) {
 
 	t.Run("TraceContext implements Scorer", func(t *testing.T) {
 		trace, _ := client.Trace(ctx, "test-trace")
-		var scorer langfuse.Scorer = trace
-		if scorer == nil {
-			t.Fatal("trace should implement Scorer")
+		if trace == nil {
+			t.Fatal("trace should not be nil")
 		}
+		var scorer langfuse.Scorer = trace
 
 		err := scorer.Score(ctx, "quality", 0.95)
 		if err != nil {
@@ -319,10 +319,10 @@ func TestV1ScorerInterface(t *testing.T) {
 	t.Run("SpanContext implements Scorer", func(t *testing.T) {
 		trace, _ := client.Trace(ctx, "test-trace")
 		span, _ := trace.Span(ctx, "test-span")
-		var scorer langfuse.Scorer = span
-		if scorer == nil {
-			t.Fatal("span should implement Scorer")
+		if span == nil {
+			t.Fatal("span should not be nil")
 		}
+		var scorer langfuse.Scorer = span
 
 		err := scorer.Score(ctx, "quality", 0.8)
 		if err != nil {
@@ -343,10 +343,10 @@ func TestV1ScorerInterface(t *testing.T) {
 	t.Run("GenerationContext implements Scorer", func(t *testing.T) {
 		trace, _ := client.Trace(ctx, "test-trace")
 		gen, _ := trace.Generation(ctx, "test-gen", langfuse.WithModel("gpt-4"))
-		var scorer langfuse.Scorer = gen
-		if scorer == nil {
-			t.Fatal("generation should implement Scorer")
+		if gen == nil {
+			t.Fatal("generation should not be nil")
 		}
+		var scorer langfuse.Scorer = gen
 
 		err := scorer.Score(ctx, "accuracy", 0.92)
 		if err != nil {
@@ -529,7 +529,7 @@ func TestV1FullWorkflow(t *testing.T) {
 		}
 
 		// End generation
-		gen, err = gen.EndV1(ctx,
+		_, err = gen.EndV1(ctx,
 			langfuse.WithEndOutput("response"),
 			langfuse.WithUsage(100, 50),
 		)
@@ -538,7 +538,7 @@ func TestV1FullWorkflow(t *testing.T) {
 		}
 
 		// End span
-		span, err = span.EndV1(ctx,
+		_, err = span.EndV1(ctx,
 			langfuse.WithEndOutput("processed"),
 		)
 		if err != nil {
@@ -546,8 +546,8 @@ func TestV1FullWorkflow(t *testing.T) {
 		}
 
 		// Update trace
-		trace, err = trace.UpdateV1(ctx,
-			langfuse.WithUpdateOutput(map[string]interface{}{"status": "success"}),
+		_, err = trace.UpdateV1(ctx,
+			langfuse.WithUpdateOutput(map[string]any{"status": "success"}),
 			langfuse.WithUpdateTags("completed"),
 		)
 		if err != nil {
