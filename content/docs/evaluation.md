@@ -1,4 +1,7 @@
-# Evaluation
+---
+title: Evaluation
+weight: 4
+---
 
 Langfuse provides powerful evaluation capabilities, including built-in support for LLM-as-a-Judge workflows.
 
@@ -567,6 +570,6 @@ func evaluateResponse(client *langfuse.Client, generationID string, input, outpu
 
 ## Next Steps
 
-- [API Reference](api-reference.md) - Complete type reference
-- [Tracing Guide](tracing.md) - Learn about traces and observations
-- [Configuration](configuration.md) - Customize SDK behavior
+- [API Reference](../api-reference/) - Complete type reference
+- [Tracing Guide](../tracing/) - Learn about traces and observations
+- [Configuration](../configuration/) - Customize SDK behavior

@@ -5,8 +5,8 @@ on:
     branches:
       - main
     paths:
-      - 'docs/**'
-      - 'mkdocs.yml'
+      - 'content/**'
+      - 'hugo.toml'
       - '.github/workflows/docs.yml'
   workflow_dispatch:
 
@@ -26,23 +26,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - name: Setup Hugo
+        uses: peaceiris/actions-hugo@v3
         with:
-          python-version: '3.x'
-          cache: 'pip'
+          hugo-version: 'latest'
+          extended: true
 
-      - name: Install dependencies
-        run: |
-          pip install mkdocs-material
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
 
       - name: Build documentation
-        run: mkdocs build --strict
+        run: hugo --minify
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./site
+          path: ./public
 
   deploy:
     environment:

@@ -1,4 +1,7 @@
-# Getting Started
+---
+title: Getting Started
+weight: 1
+---
 
 This guide will help you get up and running with the Langfuse Go SDK.
 
@@ -22,8 +25,9 @@ go get github.com/jdziat/langfuse-go
 2. Navigate to Settings > API Keys
 3. Copy your Public Key (starts with `pk_`) and Secret Key (starts with `sk_`)
 
-!!! warning
-    Keep your Secret Key secure. Never commit it to version control or expose it in client-side code.
+{{< callout type="warning" >}}
+Keep your Secret Key secure. Never commit it to version control or expose it in client-side code.
+{{< /callout >}}
 
 ## Basic Setup
 
@@ -261,10 +265,10 @@ if err := client.Flush(context.Background()); err != nil {
 
 Now that you have the basics working, explore:
 
-- [Configuration Options](configuration.md) - Customize batching, timeouts, and regions
-- [Tracing Guide](tracing.md) - Learn about traces, spans, generations, and events
-- [Evaluation Workflows](evaluation.md) - Integrate LLM-as-a-Judge
-- [API Reference](api-reference.md) - Complete type reference
+- [Configuration Options](../configuration/) - Customize batching, timeouts, and regions
+- [Tracing Guide](../tracing/) - Learn about traces, spans, generations, and events
+- [Evaluation Workflows](../evaluation/) - Integrate LLM-as-a-Judge
+- [API Reference](../api-reference/) - Complete type reference
 
 ## Common Issues
 

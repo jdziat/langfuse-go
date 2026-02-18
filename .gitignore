@@ -35,3 +35,7 @@ coverage.out
 .env.local
 evaluationevaluation
 dist/
+
+# Hugo build output
+public/
+resources/_gen/

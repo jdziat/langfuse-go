@@ -1,0 +1,25 @@
+baseURL = "https://jdziat.github.io/langfuse-go/"
+languageCode = "en-us"
+title = "Langfuse Go SDK"
+
+[module]
+  [[module.imports]]
+    path = "github.com/imfing/hextra"
+
+[markup.goldmark.renderer]
+  unsafe = true
+
+[markup.highlight]
+  noClasses = false
+
+[[menu.main]]
+  name = "Documentation"
+  pageRef = "/docs"
+  weight = 1
+
+[[menu.main]]
+  name = "GitHub"
+  url = "https://github.com/jdziat/langfuse-go"
+  weight = 2
+  [menu.main.params]
+    icon = "github"

@@ -1,4 +1,7 @@
-# API Reference
+---
+title: API Reference
+weight: 5
+---
 
 Complete reference for the Langfuse Go SDK.
 
@@ -689,7 +692,7 @@ func main() {
 
 ## Next Steps
 
-- [Getting Started](getting-started.md) - Basic setup guide
-- [Tracing Guide](tracing.md) - Complete tracing documentation
-- [Evaluation Guide](evaluation.md) - LLM-as-a-Judge workflows
-- [Configuration](configuration.md) - Configuration reference
+- [Getting Started](../getting-started/) - Basic setup guide
+- [Tracing Guide](../tracing/) - Complete tracing documentation
+- [Evaluation Guide](../evaluation/) - LLM-as-a-Judge workflows
+- [Configuration](../configuration/) - Configuration reference

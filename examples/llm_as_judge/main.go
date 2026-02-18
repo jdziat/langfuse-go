@@ -129,7 +129,7 @@ func ragWorkflowExample() {
 		// In real code, this would call your LLM
 		return "Dependency injection in Go is typically implemented by passing dependencies as constructor parameters...",
 			150, // input tokens
-			50,  // output tokens
+			50, // output tokens
 			nil
 	})
 	if err != nil {
