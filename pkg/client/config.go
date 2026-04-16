@@ -26,6 +26,7 @@ const (
 
 // Default configuration values
 const (
+	DefaultAPIPathPrefix         = pkgconfig.DefaultAPIPathPrefix
 	DefaultTimeout               = pkgconfig.DefaultTimeout
 	DefaultMaxRetries            = pkgconfig.DefaultMaxRetries
 	DefaultRetryDelay            = pkgconfig.DefaultRetryDelay
@@ -86,6 +87,11 @@ type Config struct {
 
 	// BaseURL is the base URL for the Langfuse API.
 	BaseURL string
+
+	// APIPathPrefix is the URL path prefix applied to every API request.
+	// Defaults to "/api/public". Override for self-hosted deployments that
+	// proxy Langfuse behind a different path.
+	APIPathPrefix string
 
 	// Region is the Langfuse cloud region.
 	Region Region
@@ -205,6 +211,10 @@ func (c *Config) ApplyDefaults() {
 		if url, ok := pkgconfig.RegionBaseURLs[c.Region]; ok {
 			c.BaseURL = url
 		}
+	}
+
+	if c.APIPathPrefix == "" {
+		c.APIPathPrefix = DefaultAPIPathPrefix
 	}
 
 	if c.Timeout == 0 {

@@ -12,8 +12,8 @@ import (
 
 func TestScoresClientList(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/scores" {
-			t.Errorf("Expected /scores, got %s", r.URL.Path)
+		if r.URL.Path != "/api/public/scores" {
+			t.Errorf("Expected /api/public/scores, got %s", r.URL.Path)
 		}
 		if r.Method != http.MethodGet {
 			t.Errorf("Expected GET, got %s", r.Method)
@@ -87,8 +87,8 @@ func TestScoresClientListWithParams(t *testing.T) {
 
 func TestScoresClientGet(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/scores/score-123" {
-			t.Errorf("Expected /scores/score-123, got %s", r.URL.Path)
+		if r.URL.Path != "/api/public/scores/score-123" {
+			t.Errorf("Expected /api/public/scores/score-123, got %s", r.URL.Path)
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -193,8 +193,8 @@ func TestScoresClientCreateValidation(t *testing.T) {
 
 func TestScoresClientDelete(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/scores/score-123" {
-			t.Errorf("Expected /scores/score-123, got %s", r.URL.Path)
+		if r.URL.Path != "/api/public/scores/score-123" {
+			t.Errorf("Expected /api/public/scores/score-123, got %s", r.URL.Path)
 		}
 		if r.Method != http.MethodDelete {
 			t.Errorf("Expected DELETE, got %s", r.Method)

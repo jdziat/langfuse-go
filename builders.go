@@ -1080,7 +1080,7 @@ func (c *Client) NewTrace() *TraceBuilder {
 		client: c,
 		trace: &createTraceEvent{
 			ID:        generateID(),
-			Timestamp: Now(),
+			Timestamp: TimeNow(),
 		},
 	}
 }
@@ -1201,7 +1201,7 @@ func (b *TraceBuilder) Clone() *TraceBuilder {
 		client: b.client,
 		trace: &createTraceEvent{
 			ID:          generateID(), // New ID for the clone
-			Timestamp:   Now(),        // Fresh timestamp
+			Timestamp:   TimeNow(),    // Fresh timestamp
 			Name:        b.trace.Name,
 			UserID:      b.trace.UserID,
 			SessionID:   b.trace.SessionID,
@@ -1305,7 +1305,7 @@ func (t *TraceContext) NewSpan() *SpanBuilder {
 		span: &createSpanEvent{
 			ID:        generateID(),
 			TraceID:   t.traceID,
-			StartTime: Now(),
+			StartTime: TimeNow(),
 		},
 	}
 }
@@ -1318,7 +1318,7 @@ func (t *TraceContext) NewGeneration() *GenerationBuilder {
 		gen: &createGenerationEvent{
 			ID:        generateID(),
 			TraceID:   t.traceID,
-			StartTime: Now(),
+			StartTime: TimeNow(),
 		},
 	}
 }
@@ -1331,7 +1331,7 @@ func (t *TraceContext) NewEvent() *EventBuilder {
 		event: &createEventEvent{
 			ID:        generateID(),
 			TraceID:   t.traceID,
-			StartTime: Now(),
+			StartTime: TimeNow(),
 		},
 	}
 }
@@ -1435,10 +1435,14 @@ func (b *TraceUpdateBuilder) Public(public bool) *TraceUpdateBuilder {
 }
 
 // Apply applies the update.
+//
+// Langfuse's ingestion API has no distinct "trace-update" event type — traces
+// are upserted via "trace-create" events that share the same id. Sending the
+// update as a trace-create event merges it into the existing trace server-side.
 func (b *TraceUpdateBuilder) Apply(ctx context.Context) error {
 	event := ingestionEvent{
 		ID:        generateID(),
-		Type:      eventTypeTraceUpdate,
+		Type:      eventTypeTraceCreate,
 		Timestamp: Now(),
 		Body:      b.update,
 	}
@@ -1527,13 +1531,13 @@ func (b *SpanBuilder) Name(name string) *SpanBuilder {
 
 // StartTime sets the start time.
 func (b *SpanBuilder) StartTime(t time.Time) *SpanBuilder {
-	b.span.StartTime = Time{Time: t}
+	b.span.StartTime = TimePtr(t)
 	return b
 }
 
 // EndTime sets the end time.
 func (b *SpanBuilder) EndTime(t time.Time) *SpanBuilder {
-	b.span.EndTime = Time{Time: t}
+	b.span.EndTime = TimePtr(t)
 	return b
 }
 
@@ -1618,7 +1622,7 @@ func (b *SpanBuilder) Clone() *SpanBuilder {
 			ID:                  generateID(), // New ID for the clone
 			TraceID:             b.span.TraceID,
 			Name:                b.span.Name,
-			StartTime:           Now(), // Fresh timestamp
+			StartTime:           TimeNow(), // Fresh timestamp
 			EndTime:             b.span.EndTime,
 			Metadata:            metadata,
 			Level:               b.span.Level,
@@ -1824,7 +1828,7 @@ func (b *SpanUpdateBuilder) Name(name string) *SpanUpdateBuilder {
 
 // EndTime sets the end time.
 func (b *SpanUpdateBuilder) EndTime(t time.Time) *SpanUpdateBuilder {
-	b.update.EndTime = Time{Time: t}
+	b.update.EndTime = TimePtr(t)
 	return b
 }
 
@@ -1912,7 +1916,7 @@ func (b *EventBuilder) Name(name string) *EventBuilder {
 
 // StartTime sets the start time.
 func (b *EventBuilder) StartTime(t time.Time) *EventBuilder {
-	b.event.StartTime = Time{Time: t}
+	b.event.StartTime = TimePtr(t)
 	return b
 }
 
@@ -2034,19 +2038,19 @@ func (b *GenerationBuilder) Name(name string) *GenerationBuilder {
 
 // StartTime sets the start time.
 func (b *GenerationBuilder) StartTime(t time.Time) *GenerationBuilder {
-	b.gen.StartTime = Time{Time: t}
+	b.gen.StartTime = TimePtr(t)
 	return b
 }
 
 // EndTime sets the end time.
 func (b *GenerationBuilder) EndTime(t time.Time) *GenerationBuilder {
-	b.gen.EndTime = Time{Time: t}
+	b.gen.EndTime = TimePtr(t)
 	return b
 }
 
 // CompletionStartTime sets when the completion started.
 func (b *GenerationBuilder) CompletionStartTime(t time.Time) *GenerationBuilder {
-	b.gen.CompletionStartTime = Time{Time: t}
+	b.gen.CompletionStartTime = TimePtr(t)
 	return b
 }
 
@@ -2195,7 +2199,7 @@ func (b *GenerationBuilder) Clone() *GenerationBuilder {
 			ID:                  generateID(), // New ID for the clone
 			TraceID:             b.gen.TraceID,
 			Name:                b.gen.Name,
-			StartTime:           Now(), // Fresh timestamp
+			StartTime:           TimeNow(), // Fresh timestamp
 			EndTime:             b.gen.EndTime,
 			CompletionStartTime: b.gen.CompletionStartTime,
 			Metadata:            metadata,
@@ -2423,13 +2427,13 @@ func (b *GenerationUpdateBuilder) Name(name string) *GenerationUpdateBuilder {
 
 // EndTime sets the end time.
 func (b *GenerationUpdateBuilder) EndTime(t time.Time) *GenerationUpdateBuilder {
-	b.update.EndTime = Time{Time: t}
+	b.update.EndTime = TimePtr(t)
 	return b
 }
 
 // CompletionStartTime sets when the completion started.
 func (b *GenerationUpdateBuilder) CompletionStartTime(t time.Time) *GenerationUpdateBuilder {
-	b.update.CompletionStartTime = Time{Time: t}
+	b.update.CompletionStartTime = TimePtr(t)
 	return b
 }
 

@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	pkgerrors "github.com/jdziat/langfuse-go/pkg/errors"
@@ -32,13 +33,15 @@ const (
 	DecisionDrop  = pkgingestion.DecisionDrop
 )
 
-// API endpoints.
+// API endpoints. These are suffixes appended to the configured API path
+// prefix (default "/api/public") by the HTTP client. Full paths in production
+// are "/api/public/ingestion" and "/api/public/health".
 var endpoints = struct {
 	Ingestion string
 	Health    string
 }{
-	Ingestion: "/api/public/ingestion",
-	Health:    "/api/public/health",
+	Ingestion: "/ingestion",
+	Health:    "/health",
 }
 
 // ErrBackpressure is returned when an event is rejected due to backpressure.
@@ -157,8 +160,21 @@ func (c *Client) sendBatch(ctx context.Context, events []IngestionEvent) error {
 
 	// Log errors if any
 	if result.HasErrors() {
+		// Build an index of event ID -> event for correlation
+		eventByID := make(map[string]IngestionEvent, len(events))
+		for _, evt := range events {
+			eventByID[evt.ID] = evt
+		}
 		for _, e := range result.Errors {
-			c.log("ingestion error for event %s: %s", e.ID, e.Message)
+			evt, ok := eventByID[e.ID]
+			if ok {
+				bodyBytes, _ := json.Marshal(evt.Body)
+				c.log("ingestion error for event %s (type=%s, status=%d): message=%q error=%q body=%s",
+					e.ID, evt.Type, e.Status, e.Message, e.Error, string(bodyBytes))
+			} else {
+				c.log("ingestion error for event %s (status=%d): message=%q error=%q",
+					e.ID, e.Status, e.Message, e.Error)
+			}
 		}
 		if c.config.Metrics != nil {
 			c.config.Metrics.IncrementCounter("langfuse.ingestion.errors", int64(len(result.Errors)))

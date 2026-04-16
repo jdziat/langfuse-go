@@ -34,6 +34,7 @@ const (
 type httpClient struct {
 	client         *http.Client
 	baseURL        string
+	apiPathPrefix  string
 	authHeader     string
 	maxRetries     int
 	retryDelay     time.Duration
@@ -62,6 +63,7 @@ func newHTTPClient(cfg *Config) *httpClient {
 	h := &httpClient{
 		client:        cfg.HTTPClient,
 		baseURL:       strings.TrimSuffix(cfg.BaseURL, "/"),
+		apiPathPrefix: strings.TrimSuffix(cfg.APIPathPrefix, "/"),
 		authHeader:    "Basic " + auth,
 		maxRetries:    cfg.MaxRetries,
 		retryDelay:    cfg.RetryDelay,
@@ -130,8 +132,11 @@ func (h *httpClient) doWithRetries(ctx context.Context, req *request) error {
 
 // doOnce executes a single HTTP request.
 func (h *httpClient) doOnce(ctx context.Context, req *request) error {
-	// Build URL
-	u := h.baseURL + req.path
+	// Build URL: baseURL + apiPathPrefix + req.path.
+	// Callers pass path suffixes like "/traces" or "/ingestion"; the prefix
+	// (default "/api/public") is applied here so endpoint constants stay
+	// agnostic to the deployment layout.
+	u := h.baseURL + h.apiPathPrefix + req.path
 	if len(req.query) > 0 {
 		u += "?" + req.query.Encode()
 	}

@@ -12,8 +12,8 @@ import (
 
 func TestModelsClientList(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/models" {
-			t.Errorf("Expected /models, got %s", r.URL.Path)
+		if r.URL.Path != "/api/public/models" {
+			t.Errorf("Expected /api/public/models, got %s", r.URL.Path)
 		}
 		if r.Method != http.MethodGet {
 			t.Errorf("Expected GET, got %s", r.Method)
@@ -78,8 +78,8 @@ func TestModelsClientListWithPagination(t *testing.T) {
 
 func TestModelsClientGet(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/models/model-123" {
-			t.Errorf("Expected /models/model-123, got %s", r.URL.Path)
+		if r.URL.Path != "/api/public/models/model-123" {
+			t.Errorf("Expected /api/public/models/model-123, got %s", r.URL.Path)
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -182,8 +182,8 @@ func TestModelsClientCreateValidation(t *testing.T) {
 
 func TestModelsClientDelete(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/models/model-123" {
-			t.Errorf("Expected /models/model-123, got %s", r.URL.Path)
+		if r.URL.Path != "/api/public/models/model-123" {
+			t.Errorf("Expected /api/public/models/model-123, got %s", r.URL.Path)
 		}
 		if r.Method != http.MethodDelete {
 			t.Errorf("Expected DELETE, got %s", r.Method)

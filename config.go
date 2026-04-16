@@ -53,6 +53,8 @@ const (
 	EnvRegion = "LANGFUSE_REGION"
 	// EnvDebug is the environment variable to enable debug mode.
 	EnvDebug = "LANGFUSE_DEBUG"
+	// EnvAPIPathPrefix is the environment variable for the API path prefix.
+	EnvAPIPathPrefix = "LANGFUSE_API_PATH_PREFIX"
 )
 
 // ============================================================================
@@ -61,6 +63,10 @@ const (
 
 // Default configuration values (re-exported from pkg/config for backward compatibility).
 const (
+	// DefaultAPIPathPrefix is the URL path prefix applied to every API request.
+	// Langfuse's public REST API lives under this prefix.
+	DefaultAPIPathPrefix = pkgconfig.DefaultAPIPathPrefix
+
 	// DefaultTimeout is the default request timeout.
 	DefaultTimeout = pkgconfig.DefaultTimeout
 
@@ -134,6 +140,11 @@ type Config struct {
 	// BaseURL is the base URL for the Langfuse API.
 	// If not set, it will be derived from the Region.
 	BaseURL string
+
+	// APIPathPrefix is the URL path prefix applied to every API request.
+	// Defaults to "/api/public" if not set. Override for self-hosted
+	// deployments that proxy Langfuse behind a non-standard path.
+	APIPathPrefix string
 
 	// Region is the Langfuse cloud region.
 	// Defaults to RegionEU if not set and BaseURL is empty.
@@ -310,6 +321,10 @@ func (c *Config) applyDefaults() {
 		}
 	}
 
+	if c.APIPathPrefix == "" {
+		c.APIPathPrefix = DefaultAPIPathPrefix
+	}
+
 	if c.Timeout == 0 {
 		c.Timeout = DefaultTimeout
 	}
@@ -343,7 +358,11 @@ func (c *Config) applyDefaults() {
 	}
 
 	if c.ShutdownTimeout == 0 {
-		c.ShutdownTimeout = DefaultShutdownTimeout
+		// Default shutdown timeout, but ensure it's at least the request timeout
+		// so in-flight requests can finish before shutdown force-cancels them.
+		// Without this, a user who sets WithTimeout > DefaultShutdownTimeout would
+		// trip the "shutdown timeout must be >= request timeout" validation.
+		c.ShutdownTimeout = max(DefaultShutdownTimeout, c.Timeout)
 	}
 
 	if c.BatchQueueSize == 0 {
@@ -553,6 +572,11 @@ func NewFromEnv(opts ...ConfigOption) (*Client, error) {
 		envOpts = append(envOpts, WithBaseURL(baseURL))
 	} else if host := os.Getenv(EnvHost); host != "" {
 		envOpts = append(envOpts, WithBaseURL(host))
+	}
+
+	// Check for API path prefix
+	if prefix := os.Getenv(EnvAPIPathPrefix); prefix != "" {
+		envOpts = append(envOpts, WithAPIPathPrefix(prefix))
 	}
 
 	// Check for region

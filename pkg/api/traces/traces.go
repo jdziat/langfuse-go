@@ -10,6 +10,10 @@ import (
 )
 
 // Endpoint for the traces API.
+//
+// This is the suffix appended to the configured API path prefix
+// (see config.APIPathPrefix, default "/api/public"). Full request
+// path for production is "/api/public/traces".
 const Endpoint = "/traces"
 
 // Client handles trace-related API operations.

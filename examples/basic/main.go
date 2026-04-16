@@ -15,6 +15,7 @@ func main() {
 	client, err := langfuse.New(
 		os.Getenv("LANGFUSE_PUBLIC_KEY"),
 		os.Getenv("LANGFUSE_SECRET_KEY"),
+		langfuse.WithBaseURL(os.Getenv("LANGFUSE_BASE_URL")),
 		langfuse.WithRegion(langfuse.RegionUS),
 		langfuse.WithDebug(true),
 	)

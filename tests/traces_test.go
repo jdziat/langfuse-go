@@ -12,8 +12,8 @@ import (
 
 func TestTracesClientList(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/traces" {
-			t.Errorf("Expected /traces, got %s", r.URL.Path)
+		if r.URL.Path != "/api/public/traces" {
+			t.Errorf("Expected /api/public/traces, got %s", r.URL.Path)
 		}
 		if r.Method != http.MethodGet {
 			t.Errorf("Expected GET, got %s", r.Method)
@@ -127,8 +127,8 @@ func TestTracesClientListNilParams(t *testing.T) {
 
 func TestTracesClientGet(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/traces/trace-123" {
-			t.Errorf("Expected /traces/trace-123, got %s", r.URL.Path)
+		if r.URL.Path != "/api/public/traces/trace-123" {
+			t.Errorf("Expected /api/public/traces/trace-123, got %s", r.URL.Path)
 		}
 		if r.Method != http.MethodGet {
 			t.Errorf("Expected GET, got %s", r.Method)
@@ -190,8 +190,8 @@ func TestTracesClientGetNotFound(t *testing.T) {
 
 func TestTracesClientDelete(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/traces/trace-123" {
-			t.Errorf("Expected /traces/trace-123, got %s", r.URL.Path)
+		if r.URL.Path != "/api/public/traces/trace-123" {
+			t.Errorf("Expected /api/public/traces/trace-123, got %s", r.URL.Path)
 		}
 		if r.Method != http.MethodDelete {
 			t.Errorf("Expected DELETE, got %s", r.Method)

@@ -428,7 +428,7 @@ type ingestionEvent struct {
 // traceEvent represents the body of trace-create and trace-update events.
 type traceEvent struct {
 	ID          string   `json:"id"`
-	Timestamp   Time     `json:"timestamp,omitempty"`
+	Timestamp   *Time    `json:"timestamp,omitempty"`
 	Name        string   `json:"name,omitempty"`
 	UserID      string   `json:"userId,omitempty"`
 	Input       any      `json:"input,omitempty"`
@@ -448,8 +448,8 @@ type observationEvent struct {
 	ID                  string           `json:"id"`
 	TraceID             string           `json:"traceId,omitempty"`
 	Name                string           `json:"name,omitempty"`
-	StartTime           Time             `json:"startTime,omitempty"`
-	EndTime             Time             `json:"endTime,omitempty"`
+	StartTime           *Time            `json:"startTime,omitempty"`
+	EndTime             *Time            `json:"endTime,omitempty"`
 	Metadata            Metadata         `json:"metadata,omitempty"`
 	Level               ObservationLevel `json:"level,omitempty"`
 	StatusMessage       string           `json:"statusMessage,omitempty"`
@@ -465,7 +465,7 @@ type observationEvent struct {
 	Usage               *Usage   `json:"usage,omitempty"`
 	PromptName          string   `json:"promptName,omitempty"`
 	PromptVersion       int      `json:"promptVersion,omitempty"`
-	CompletionStartTime Time     `json:"completionStartTime,omitempty"`
+	CompletionStartTime *Time    `json:"completionStartTime,omitempty"`
 }
 
 // scoreEvent represents the body of a score-create event.

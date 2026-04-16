@@ -28,7 +28,11 @@ func simpleExample() {
 	fmt.Println("=== Simple v1 API Example ===")
 
 	// Create client with simplified configuration - only essential parameters
-	client := langfuse.NewClient("pk-lf-test-key", "sk-lf-test-key")
+	client := langfuse.NewClient(
+		os.Getenv("LANGFUSE_PUBLIC_KEY"),
+		os.Getenv("LANGFUSE_SECRET_KEY"),
+		langfuse.WithBaseURL(os.Getenv("LANGFUSE_BASE_URL")),
+	)
 	defer client.Shutdown(context.Background())
 
 	ctx := context.Background()
