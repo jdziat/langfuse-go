@@ -1,3 +1,10 @@
+## [1.3.1](https://github.com/jdziat/langfuse-go/compare/v1.3.0...v1.3.1) (2026-04-16)
+
+
+### Bug Fixes
+
+* **ingestion:** correct event serialization and API paths ([#15](https://github.com/jdziat/langfuse-go/issues/15)) ([6a9ac11](https://github.com/jdziat/langfuse-go/commit/6a9ac11107c45061da08e33e92a37536843d45ef))
+
 # [1.3.0](https://github.com/jdziat/langfuse-go/compare/v1.2.0...v1.3.0) (2026-02-17)
 
 
