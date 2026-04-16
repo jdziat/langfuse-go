@@ -17,6 +17,16 @@ func WithBaseURL(url string) ConfigOption {
 	}
 }
 
+// WithAPIPathPrefix sets the URL path prefix applied to every API request.
+// Defaults to "/api/public". Override for self-hosted deployments that proxy
+// Langfuse behind a non-standard path. Pass "" to disable the prefix entirely
+// (paths like "/traces" become absolute against BaseURL).
+func WithAPIPathPrefix(prefix string) ConfigOption {
+	return func(c *Config) {
+		c.APIPathPrefix = prefix
+	}
+}
+
 // WithRegion sets the Langfuse cloud region.
 func WithRegion(region Region) ConfigOption {
 	return func(c *Config) {

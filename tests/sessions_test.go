@@ -12,8 +12,8 @@ import (
 
 func TestSessionsClientList(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/sessions" {
-			t.Errorf("Expected /sessions, got %s", r.URL.Path)
+		if r.URL.Path != "/api/public/sessions" {
+			t.Errorf("Expected /api/public/sessions, got %s", r.URL.Path)
 		}
 		if r.Method != http.MethodGet {
 			t.Errorf("Expected GET, got %s", r.Method)
@@ -83,8 +83,8 @@ func TestSessionsClientListWithParams(t *testing.T) {
 
 func TestSessionsClientGet(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/sessions/session-123" {
-			t.Errorf("Expected /sessions/session-123, got %s", r.URL.Path)
+		if r.URL.Path != "/api/public/sessions/session-123" {
+			t.Errorf("Expected /api/public/sessions/session-123, got %s", r.URL.Path)
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -114,14 +114,14 @@ func TestSessionsClientGetWithTraces(t *testing.T) {
 		callCount++
 		w.Header().Set("Content-Type", "application/json")
 
-		if r.URL.Path == "/sessions/session-123" {
+		if r.URL.Path == "/api/public/sessions/session-123" {
 			json.NewEncoder(w).Encode(langfuse.Session{
 				ID: "session-123",
 			})
 			return
 		}
 
-		if r.URL.Path == "/traces" {
+		if r.URL.Path == "/api/public/traces" {
 			query := r.URL.Query()
 			if query.Get("sessionId") != "session-123" {
 				t.Errorf("Expected sessionId=session-123, got %s", query.Get("sessionId"))

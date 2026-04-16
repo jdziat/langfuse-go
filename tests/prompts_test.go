@@ -13,8 +13,8 @@ import (
 
 func TestPromptsClientList(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v2/prompts" {
-			t.Errorf("Expected /v2/prompts, got %s", r.URL.Path)
+		if r.URL.Path != "/api/public/v2/prompts" {
+			t.Errorf("Expected /api/public/v2/prompts, got %s", r.URL.Path)
 		}
 		if r.Method != http.MethodGet {
 			t.Errorf("Expected GET, got %s", r.Method)
@@ -46,8 +46,8 @@ func TestPromptsClientList(t *testing.T) {
 
 func TestPromptsClientGet(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v2/prompts/my-prompt" {
-			t.Errorf("Expected /v2/prompts/my-prompt, got %s", r.URL.Path)
+		if r.URL.Path != "/api/public/v2/prompts/my-prompt" {
+			t.Errorf("Expected /api/public/v2/prompts/my-prompt, got %s", r.URL.Path)
 		}
 
 		version := r.URL.Query().Get("version")

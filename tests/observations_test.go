@@ -12,8 +12,8 @@ import (
 
 func TestObservationsClientList(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/observations" {
-			t.Errorf("Expected /observations, got %s", r.URL.Path)
+		if r.URL.Path != "/api/public/observations" {
+			t.Errorf("Expected /api/public/observations, got %s", r.URL.Path)
 		}
 		if r.Method != http.MethodGet {
 			t.Errorf("Expected GET, got %s", r.Method)
@@ -82,8 +82,8 @@ func TestObservationsClientListWithParams(t *testing.T) {
 
 func TestObservationsClientGet(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/observations/obs-123" {
-			t.Errorf("Expected /observations/obs-123, got %s", r.URL.Path)
+		if r.URL.Path != "/api/public/observations/obs-123" {
+			t.Errorf("Expected /api/public/observations/obs-123, got %s", r.URL.Path)
 		}
 
 		w.Header().Set("Content-Type", "application/json")

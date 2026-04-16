@@ -4,12 +4,13 @@ import "os"
 
 // Environment variable names for configuration.
 const (
-	EnvPublicKey = "LANGFUSE_PUBLIC_KEY"
-	EnvSecretKey = "LANGFUSE_SECRET_KEY"
-	EnvBaseURL   = "LANGFUSE_BASE_URL"
-	EnvHost      = "LANGFUSE_HOST"
-	EnvRegion    = "LANGFUSE_REGION"
-	EnvDebug     = "LANGFUSE_DEBUG"
+	EnvPublicKey     = "LANGFUSE_PUBLIC_KEY"
+	EnvSecretKey     = "LANGFUSE_SECRET_KEY"
+	EnvBaseURL       = "LANGFUSE_BASE_URL"
+	EnvHost          = "LANGFUSE_HOST"
+	EnvRegion        = "LANGFUSE_REGION"
+	EnvDebug         = "LANGFUSE_DEBUG"
+	EnvAPIPathPrefix = "LANGFUSE_API_PATH_PREFIX"
 )
 
 // GetEnvString returns the value of an environment variable or a default.

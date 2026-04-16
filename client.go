@@ -118,6 +118,7 @@ func convertToPkgClientConfig(cfg *Config) *pkgclient.Config {
 		PublicKey:            cfg.PublicKey,
 		SecretKey:            cfg.SecretKey,
 		BaseURL:              cfg.BaseURL,
+		APIPathPrefix:        cfg.APIPathPrefix,
 		Region:               cfg.Region,
 		HTTPClient:           cfg.HTTPClient,
 		Timeout:              cfg.Timeout,

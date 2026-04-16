@@ -25,6 +25,15 @@ func WithBaseURL(baseURL string) ConfigOption {
 	}
 }
 
+// WithAPIPathPrefix sets the URL path prefix applied to every API request.
+// Defaults to "/api/public". Override for self-hosted deployments that proxy
+// Langfuse behind a non-standard path, or pass "" to disable the prefix.
+func WithAPIPathPrefix(prefix string) ConfigOption {
+	return func(c *Config) {
+		c.APIPathPrefix = prefix
+	}
+}
+
 // WithHTTPClient sets a custom HTTP client.
 func WithHTTPClient(client *http.Client) ConfigOption {
 	return func(c *Config) {

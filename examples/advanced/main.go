@@ -17,10 +17,14 @@ func main() {
 	client, err := langfuse.New(
 		os.Getenv("LANGFUSE_PUBLIC_KEY"),
 		os.Getenv("LANGFUSE_SECRET_KEY"),
-		langfuse.WithRegion(langfuse.RegionUS),
+		langfuse.WithBaseURL(os.Getenv("LANGFUSE_BASE_URL")),
 		langfuse.WithBatchSize(50),
-		langfuse.WithFlushInterval(10*time.Second),
+		langfuse.WithFlushInterval(120*time.Second),
 		langfuse.WithTimeout(60*time.Second),
+		// ShutdownTimeout must be >= Timeout so in-flight requests can finish
+		// during graceful shutdown. (The SDK will auto-bump this if unset, but
+		// we set it explicitly here for documentation.)
+		langfuse.WithShutdownTimeout(60*time.Second),
 		langfuse.WithMaxRetries(5),
 	)
 	if err != nil {

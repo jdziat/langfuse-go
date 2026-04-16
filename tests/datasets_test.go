@@ -12,8 +12,8 @@ import (
 
 func TestDatasetsClientList(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v2/datasets" {
-			t.Errorf("Expected /v2/datasets, got %s", r.URL.Path)
+		if r.URL.Path != "/api/public/v2/datasets" {
+			t.Errorf("Expected /api/public/v2/datasets, got %s", r.URL.Path)
 		}
 		if r.Method != http.MethodGet {
 			t.Errorf("Expected GET, got %s", r.Method)
@@ -45,8 +45,8 @@ func TestDatasetsClientList(t *testing.T) {
 
 func TestDatasetsClientGet(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v2/datasets/my-dataset" {
-			t.Errorf("Expected /v2/datasets/my-dataset, got %s", r.URL.Path)
+		if r.URL.Path != "/api/public/v2/datasets/my-dataset" {
+			t.Errorf("Expected /api/public/v2/datasets/my-dataset, got %s", r.URL.Path)
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -130,8 +130,8 @@ func TestDatasetsClientCreateValidation(t *testing.T) {
 
 func TestDatasetsClientListItems(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/dataset-items" {
-			t.Errorf("Expected /dataset-items, got %s", r.URL.Path)
+		if r.URL.Path != "/api/public/dataset-items" {
+			t.Errorf("Expected /api/public/dataset-items, got %s", r.URL.Path)
 		}
 
 		query := r.URL.Query()
@@ -167,8 +167,8 @@ func TestDatasetsClientListItems(t *testing.T) {
 
 func TestDatasetsClientGetItem(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/dataset-items/item-123" {
-			t.Errorf("Expected /dataset-items/item-123, got %s", r.URL.Path)
+		if r.URL.Path != "/api/public/dataset-items/item-123" {
+			t.Errorf("Expected /api/public/dataset-items/item-123, got %s", r.URL.Path)
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -255,8 +255,8 @@ func TestDatasetsClientCreateItemValidation(t *testing.T) {
 
 func TestDatasetsClientDeleteItem(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/dataset-items/item-123" {
-			t.Errorf("Expected /dataset-items/item-123, got %s", r.URL.Path)
+		if r.URL.Path != "/api/public/dataset-items/item-123" {
+			t.Errorf("Expected /api/public/dataset-items/item-123, got %s", r.URL.Path)
 		}
 		if r.Method != http.MethodDelete {
 			t.Errorf("Expected DELETE, got %s", r.Method)
@@ -277,8 +277,8 @@ func TestDatasetsClientDeleteItem(t *testing.T) {
 
 func TestDatasetsClientListRuns(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/datasets/my-dataset/runs" {
-			t.Errorf("Expected /datasets/my-dataset/runs, got %s", r.URL.Path)
+		if r.URL.Path != "/api/public/datasets/my-dataset/runs" {
+			t.Errorf("Expected /api/public/datasets/my-dataset/runs, got %s", r.URL.Path)
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -307,8 +307,8 @@ func TestDatasetsClientListRuns(t *testing.T) {
 
 func TestDatasetsClientGetRun(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/datasets/my-dataset/runs/my-run" {
-			t.Errorf("Expected /datasets/my-dataset/runs/my-run, got %s", r.URL.Path)
+		if r.URL.Path != "/api/public/datasets/my-dataset/runs/my-run" {
+			t.Errorf("Expected /api/public/datasets/my-dataset/runs/my-run, got %s", r.URL.Path)
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -335,8 +335,8 @@ func TestDatasetsClientGetRun(t *testing.T) {
 
 func TestDatasetsClientDeleteRun(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/datasets/my-dataset/runs/my-run" {
-			t.Errorf("Expected /datasets/my-dataset/runs/my-run, got %s", r.URL.Path)
+		if r.URL.Path != "/api/public/datasets/my-dataset/runs/my-run" {
+			t.Errorf("Expected /api/public/datasets/my-dataset/runs/my-run, got %s", r.URL.Path)
 		}
 		if r.Method != http.MethodDelete {
 			t.Errorf("Expected DELETE, got %s", r.Method)

@@ -38,6 +38,12 @@ func (r Region) String() string {
 
 // Default configuration values.
 const (
+	// DefaultAPIPathPrefix is the URL path prefix applied to every API request.
+	// Langfuse's public REST API lives under this prefix. Override via
+	// WithAPIPathPrefix for self-hosted deployments that proxy the API
+	// behind a different path.
+	DefaultAPIPathPrefix = "/api/public"
+
 	// DefaultTimeout is the default request timeout.
 	DefaultTimeout = 30 * time.Second
 
