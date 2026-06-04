@@ -36,6 +36,57 @@ func TestNewClient(t *testing.T) {
 	}
 }
 
+// TestRootConfigPreservesRootOnlyFields verifies that RootConfig returns the
+// full root *Config, including root-only fields (such as EvaluationConfig) that
+// are not present on the field-lossy pkgclient.Config returned by the promoted
+// Config method inherited from the embedded *pkgclient.Client.
+func TestRootConfigPreservesRootOnlyFields(t *testing.T) {
+	evalCfg := &EvaluationConfig{
+		Mode:            EvaluationModeAuto,
+		DefaultWorkflow: WorkflowRAG,
+		IncludeMetadata: true,
+		IncludeTags:     true,
+	}
+
+	client, err := New(
+		"pk-lf-test-key",
+		"sk-lf-test-key",
+		WithRegion(RegionUS),
+		WithEvaluationConfig(evalCfg),
+	)
+	if err != nil {
+		t.Fatalf("New failed: %v", err)
+	}
+	defer client.Shutdown(context.Background())
+
+	got := client.RootConfig()
+	if got == nil {
+		t.Fatal("RootConfig() returned nil")
+	}
+
+	// Root-only field must round-trip through RootConfig.
+	if got.EvaluationConfig == nil {
+		t.Fatal("RootConfig().EvaluationConfig = nil, want non-nil (root-only field lost)")
+	}
+	if got.EvaluationConfig.Mode != EvaluationModeAuto {
+		t.Errorf("EvaluationConfig.Mode = %v, want %v", got.EvaluationConfig.Mode, EvaluationModeAuto)
+	}
+	if got.EvaluationConfig.DefaultWorkflow != WorkflowRAG {
+		t.Errorf("EvaluationConfig.DefaultWorkflow = %v, want %v", got.EvaluationConfig.DefaultWorkflow, WorkflowRAG)
+	}
+	if !got.EvaluationConfig.IncludeMetadata {
+		t.Error("EvaluationConfig.IncludeMetadata = false, want true")
+	}
+
+	// A couple of common fields should also match what was passed.
+	if got.PublicKey != "pk-lf-test-key" {
+		t.Errorf("PublicKey = %v, want pk-lf-test-key", got.PublicKey)
+	}
+	if got.Region != RegionUS {
+		t.Errorf("Region = %v, want %v", got.Region, RegionUS)
+	}
+}
+
 func TestNewClientValidation(t *testing.T) {
 	tests := []struct {
 		name      string

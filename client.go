@@ -29,7 +29,14 @@ var defaultStderrLogger = log.New(os.Stderr, "langfuse: ", log.LstdFlags)
 // It embeds *pkgclient.Client for core functionality (HTTP, lifecycle, batching)
 // and adds sub-clients for the Langfuse API.
 type Client struct {
-	// Embed core client for HTTP, lifecycle, batching, and backpressure
+	// Embed core client for HTTP, lifecycle, batching, and backpressure.
+	//
+	// Embedding promotes the core client's exported methods (HTTP, QueueEvent,
+	// Config, etc.) onto *Client. Note that the promoted Config method returns
+	// the internal, field-lossy pkgclient.Config rather than the full root
+	// *Config the caller passed to New/NewWithConfig (root-only fields such as
+	// EvaluationConfig and StrictValidation are not present on pkgclient.Config).
+	// Use RootConfig to retrieve the complete, correctly-typed root configuration.
 	*pkgclient.Client
 
 	// Root-specific config (extends pkg/client.Config with evaluation, etc.)
@@ -357,6 +364,29 @@ func (c *Client) Models() *ModelsClient {
 //	}
 func (c *Client) MetricsRecorder() *MetricsRecorder {
 	return c.metricsRecorder
+}
+
+// RootConfig returns the full, correctly-typed root configuration that was
+// passed to New or NewWithConfig (with defaults applied).
+//
+// Prefer RootConfig over the promoted Config method inherited from the embedded
+// *pkgclient.Client. Because the root Client anonymously embeds *pkgclient.Client,
+// the promoted Config method returns the internal pkgclient.Config, which omits
+// root-only fields such as EvaluationConfig and StrictValidation. RootConfig
+// returns the complete *Config so those fields are preserved.
+//
+// The returned pointer references the client's internal copy of the
+// configuration; treat it as read-only and do not mutate it.
+//
+// Example:
+//
+//	client, _ := langfuse.New(pk, sk, langfuse.WithEvaluationConfig(evalCfg))
+//	cfg := client.RootConfig()
+//	if cfg.EvaluationConfig != nil {
+//	    // root-only field is available here, unlike via the promoted Config method
+//	}
+func (c *Client) RootConfig() *Config {
+	return c.rootConfig
 }
 
 // PromptsWithOptions returns a configured prompts sub-client.

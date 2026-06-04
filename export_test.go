@@ -40,10 +40,8 @@ const (
 	EventTypeSDKLogForTest           = eventTypeSDKLog
 )
 
-// RootConfig returns the root-specific config from a Client for testing.
-func (c *Client) RootConfig() *Config {
-	return c.rootConfig
-}
+// RootConfig is provided as an exported method on *Client (see client.go); it
+// returns the full, correctly-typed root *Config. Tests use it directly.
 
 // HandleError calls the internal handleRootError method for testing.
 func (c *Client) HandleError(err error) {
