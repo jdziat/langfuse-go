@@ -1,3 +1,10 @@
+# [1.4.0](https://github.com/jdziat/langfuse-go/compare/v1.3.1...v1.4.0) (2026-06-04)
+
+
+### Features
+
+* feat:  ([1bbc4b7](https://github.com/jdziat/langfuse-go/commit/1bbc4b77314e9b3926ec1cc7793437d08a46ae0b))
+
 ## [1.3.1](https://github.com/jdziat/langfuse-go/compare/v1.3.0...v1.3.1) (2026-04-16)
 
 
