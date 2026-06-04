@@ -260,17 +260,23 @@ The SDK is organized into focused modules for maintainability:
 
 ```
 langfuse-go/
-├── client.go          # Main client and API entry point
-├── lifecycle.go       # Client lifecycle (initialization, shutdown)
-├── batching.go        # Event batching logic
-├── queue.go           # Async event queue management
-├── errors_api.go      # API error types (APIError)
-├── errors_async.go    # Async/batch error types (IngestionError, ShutdownError)
-├── errors_validation.go  # Validation error types
-├── errors_helpers.go  # Go-conventional As* error helpers
-├── helpers.go         # Metadata utilities and tracing helpers
-├── pkg/config/        # Layered configuration types
-└── ...                # Sub-clients, builders, and more
+├── client.go          # Main client facade and API entry point
+├── lifecycle.go       # Client lifecycle facade (initialization, shutdown)
+├── subclients.go      # Sub-client accessors (Traces, Scores, Prompts, ...)
+├── simple_api.go      # High-level convenience helpers
+├── builders.go        # Trace/observation builder facades
+├── options.go         # Configuration options facade
+├── config.go          # Configuration facade
+├── types.go           # Re-exported public types
+├── pkg/client/        # Core client, batching, and async event queue
+├── pkg/config/        # Layered configuration types and defaults
+├── pkg/errors/        # API, async, and validation error types + helpers
+├── pkg/http/          # HTTP transport, retries, and circuit breaking
+├── pkg/ingestion/     # Event ingestion and backpressure
+├── pkg/api/           # REST sub-clients (traces, scores, prompts, ...)
+├── pkg/builders/      # Builder implementations
+├── pkg/types/         # Domain types and enums
+└── pkg/evaluation/    # Evaluation result aggregation and persistence
 ```
 
 ## API Reference

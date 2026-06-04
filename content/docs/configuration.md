@@ -84,7 +84,7 @@ The SDK batches events for efficient network usage. Customize batching behavior:
 ```go
 client, err := langfuse.New("pk-lf-...", "sk-lf-...",
     langfuse.WithBatchSize(50),                 // Max events per batch (default: 100)
-    langfuse.WithFlushInterval(5*time.Second),  // Flush interval (default: 10s)
+    langfuse.WithFlushInterval(5*time.Second),  // Flush interval (default: 5s)
     langfuse.WithMaxRetries(5),                 // Max retry attempts (default: 3)
 )
 ```
@@ -107,7 +107,7 @@ How often to send batched events:
 
 - **Shorter intervals**: More real-time updates
 - **Longer intervals**: Better batching efficiency
-- **Default**: 10 seconds
+- **Default**: 5 seconds
 
 ```go
 langfuse.WithFlushInterval(5 * time.Second)
@@ -130,7 +130,7 @@ Set the timeout for HTTP requests:
 
 ```go
 client, err := langfuse.New("pk-lf-...", "sk-lf-...",
-    langfuse.WithTimeout(30*time.Second), // Default: 10s
+    langfuse.WithTimeout(30*time.Second), // Default: 30s
 )
 ```
 

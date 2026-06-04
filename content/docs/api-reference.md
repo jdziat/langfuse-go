@@ -170,7 +170,7 @@ Sets the capacity of the internal event queue.
 func WithFlushInterval(interval time.Duration) ConfigOption
 ```
 
-Sets how often batched events are sent. **Default:** 10 seconds
+Sets how often batched events are sent. **Default:** 5 seconds
 
 ### WithMaxRetries
 
@@ -186,7 +186,7 @@ Sets the maximum number of retry attempts. **Default:** 3
 func WithTimeout(timeout time.Duration) ConfigOption
 ```
 
-Sets the HTTP request timeout. **Default:** 10 seconds
+Sets the HTTP request timeout. **Default:** 30 seconds
 
 ### WithDebug
 
