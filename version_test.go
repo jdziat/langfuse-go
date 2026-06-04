@@ -9,24 +9,43 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/jdziat/langfuse-go/internal/version"
+	pkgclient "github.com/jdziat/langfuse-go/pkg/client"
 )
 
-// TestVersionMatchesVERSIONFile ensures Version is sourced from the VERSION
-// file at the module root, providing a single source of truth.
-func TestVersionMatchesVERSIONFile(t *testing.T) {
+// TestVersionSurfacesAgree ensures every version surface derives from the single
+// source of truth in internal/version, so they can never drift:
+//   - the embedded internal/version.Version (the source)
+//   - the root langfuse.Version
+//   - the pkg/client.Version
+//   - the root VERSION file (a generated mirror kept in sync by the release tooling)
+func TestVersionSurfacesAgree(t *testing.T) {
+	source := version.Version
+	if source == "" {
+		t.Fatal("internal/version.Version is empty; the embedded source is missing")
+	}
+
+	if Version != source {
+		t.Errorf("root langfuse.Version = %q, want %q (internal/version source)", Version, source)
+	}
+
+	if pkgclient.Version != source {
+		t.Errorf("pkg/client.Version = %q, want %q (internal/version source)", pkgclient.Version, source)
+	}
+
 	data, err := os.ReadFile("VERSION")
 	if err != nil {
 		t.Fatalf("failed to read VERSION file: %v", err)
 	}
-
-	want := strings.TrimSpace(string(data))
-	if Version != want {
-		t.Errorf("Version = %q, want %q (from VERSION file)", Version, want)
+	if got := strings.TrimSpace(string(data)); got != source {
+		t.Errorf("root VERSION file = %q, want %q (internal/version source); the mirror has drifted", got, source)
 	}
 }
 
-// TestUserAgentUsesVersion ensures outgoing requests carry a User-Agent built
-// from the embedded VERSION value rather than a stale hard-coded constant.
+// TestUserAgentUsesVersion ensures outgoing requests from the root client carry
+// a User-Agent built from the embedded version source rather than a stale
+// hard-coded literal.
 func TestUserAgentUsesVersion(t *testing.T) {
 	var (
 		mu        sync.Mutex
@@ -61,7 +80,7 @@ func TestUserAgentUsesVersion(t *testing.T) {
 	got := userAgent
 	mu.Unlock()
 
-	want := "langfuse-go/" + Version
+	want := "langfuse-go/" + version.Version
 	if got != want {
 		t.Errorf("User-Agent = %q, want %q", got, want)
 	}

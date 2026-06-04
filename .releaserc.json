@@ -7,10 +7,10 @@
       "changelogFile": "CHANGELOG.md"
     }],
     ["@semantic-release/exec", {
-      "prepareCmd": "echo ${nextRelease.version} > VERSION"
+      "prepareCmd": "echo ${nextRelease.version} > internal/version/version.txt && cp internal/version/version.txt VERSION"
     }],
     ["@semantic-release/git", {
-      "assets": ["CHANGELOG.md", "VERSION"],
+      "assets": ["CHANGELOG.md", "VERSION", "internal/version/version.txt"],
       "message": "chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
     }],
     ["@semantic-release/github", {

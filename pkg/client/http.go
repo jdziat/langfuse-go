@@ -63,11 +63,13 @@ func newHTTPClient(cfg *Config) *httpClient {
 	}
 
 	// Resolve the SDK version for the User-Agent. Prefer the version injected
-	// via Config (set by the root langfuse package from its embedded VERSION
-	// file) and fall back to the package-level Version constant when unset.
-	version := cfg.Version
-	if version == "" {
-		version = Version
+	// via Config (set by the root langfuse package) and fall back to the
+	// package-level Version variable when unset. Both ultimately derive from
+	// the single source of truth in internal/version, so direct pkg/client
+	// users report the real released version without any injection.
+	ver := cfg.Version
+	if ver == "" {
+		ver = Version
 	}
 
 	h := &httpClient{
@@ -80,7 +82,7 @@ func newHTTPClient(cfg *Config) *httpClient {
 		retryStrategy: retryStrategy,
 		debug:         cfg.Debug,
 		hook:          buildRequestHook(cfg),
-		userAgent:     "langfuse-go/" + version,
+		userAgent:     "langfuse-go/" + ver,
 	}
 
 	// Initialize circuit breaker if configured

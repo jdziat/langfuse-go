@@ -182,9 +182,10 @@ type Config struct {
 	MaxBackgroundSenders int
 
 	// Version is the SDK version reported in the User-Agent header.
-	// When empty, the request falls back to the package-level Version constant.
-	// The root langfuse package injects its embedded Version here so the
-	// User-Agent reflects the released module version.
+	// When empty, the request falls back to the package-level Version variable
+	// (sourced from internal/version), so direct pkg/client users still report
+	// the real released version. The root langfuse package injects the same
+	// value here; both paths resolve to the single source of truth.
 	Version string
 }
 

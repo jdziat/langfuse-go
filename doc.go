@@ -200,17 +200,14 @@
 package langfuse
 
 import (
-	_ "embed"
-	"strings"
+	"github.com/jdziat/langfuse-go/internal/version"
 )
-
-//go:embed VERSION
-var versionFile string
 
 // Version is the current SDK version.
 // This is used in User-Agent headers and for debugging.
 //
-// The value is sourced from the VERSION file at the module root (embedded at
-// build time) so that the version is defined in a single place and stays in
-// sync with releases.
-var Version = strings.TrimSpace(versionFile)
+// The value is sourced from the single source of truth in internal/version
+// (embedded from internal/version/version.txt at build time) so that the
+// version is defined in exactly one place and stays in sync across the root
+// package, pkg/client, and the root VERSION mirror.
+var Version = version.Version

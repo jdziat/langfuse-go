@@ -7,12 +7,15 @@ import (
 	"os"
 	"sync"
 
+	"github.com/jdziat/langfuse-go/internal/version"
 	pkgid "github.com/jdziat/langfuse-go/pkg/id"
 	pkgingestion "github.com/jdziat/langfuse-go/pkg/ingestion"
 )
 
-// Version is the SDK version.
-const Version = "0.1.0"
+// Version is the SDK version, sourced from the single source of truth in
+// internal/version so direct pkg/client users report the real released
+// version (not a stale literal) without depending on Config.Version injection.
+var Version = version.Version
 
 // defaultStderrLogger is used as a fallback when no logger is configured.
 var defaultStderrLogger = log.New(os.Stderr, "langfuse: ", log.LstdFlags)
