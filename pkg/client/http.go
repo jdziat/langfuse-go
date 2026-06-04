@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -74,10 +75,39 @@ func newHTTPClient(cfg *Config) *httpClient {
 
 	// Initialize circuit breaker if configured
 	if cfg.CircuitBreaker != nil {
-		h.circuitBreaker = pkghttp.NewCircuitBreaker(*cfg.CircuitBreaker)
+		cbCfg := *cfg.CircuitBreaker
+		// Default the failure classifier so the breaker only trips on errors that
+		// indicate the service (not the request) is unhealthy. Without this every
+		// 4xx — including 401/403/404/422, which signal client-side problems — would
+		// count toward the failure threshold and open the circuit. A user-supplied
+		// IsFailure always wins.
+		if cbCfg.IsFailure == nil {
+			cbCfg.IsFailure = isCircuitFailure
+		}
+		h.circuitBreaker = pkghttp.NewCircuitBreaker(cbCfg)
 	}
 
 	return h
+}
+
+// isCircuitFailure reports whether an error returned from doWithRetries should
+// count as a circuit-breaker failure. Only retryable conditions — network/transport
+// errors and retryable API responses (429 and 5xx) — indicate an unhealthy service
+// and trip the breaker. Non-retryable 4xx responses (401/403/404/422) are treated
+// as healthy server behavior so they never open the circuit.
+func isCircuitFailure(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	var apiErr *pkgerrors.APIError
+	if errors.As(err, &apiErr) {
+		return apiErr.IsRetryable()
+	}
+
+	// Non-API errors are transport/network failures (e.g. dial timeouts,
+	// connection resets) or context cancellation; treat them as service failures.
+	return true
 }
 
 // request represents an HTTP request to be made.

@@ -268,6 +268,67 @@ func TestCircuitBreaker_Execute(t *testing.T) {
 	}
 }
 
+// TestCircuitBreaker_RecoversThroughExecute verifies that a breaker created with
+// DefaultCircuitBreakerConfig (SuccessThreshold:2, HalfOpenMaxRequests:1) can fully
+// recover to Closed when driven exclusively through Execute() — the production path.
+//
+// This is a regression test for a bug where, after the first half-open probe, the
+// in-flight slot was never released: halfOpenRequests stayed at its max so Allow()
+// returned false forever and Record() was never called again, stranding the breaker
+// in half-open. The test never calls Record() after a false Allow(); it relies solely
+// on Execute() to admit and complete each probe.
+func TestCircuitBreaker_RecoversThroughExecute(t *testing.T) {
+	// Start from the shipped defaults (the values that trigger the bug) and only
+	// shorten the timeout so the test does not wait the full 30s recovery window.
+	config := DefaultCircuitBreakerConfig()
+	config.Timeout = 20 * time.Millisecond
+
+	cb := NewCircuitBreaker(config)
+
+	// Drive the breaker open with FailureThreshold consecutive failures.
+	failing := func() error { return errors.New("service unavailable") }
+	for i := 0; i < config.FailureThreshold; i++ {
+		_ = cb.Execute(failing)
+	}
+	if cb.State() != CircuitOpen {
+		t.Fatalf("after %d failures: state = %v, want Open", config.FailureThreshold, cb.State())
+	}
+
+	// While open, Execute must fail fast without invoking the function.
+	called := false
+	if err := cb.Execute(func() error { called = true; return nil }); err != ErrCircuitOpen {
+		t.Fatalf("Execute() while open = %v, want ErrCircuitOpen", err)
+	}
+	if called {
+		t.Fatal("function was invoked while circuit was open")
+	}
+
+	// Wait out the open timeout so the breaker is eligible for half-open probing.
+	time.Sleep(2 * config.Timeout)
+
+	// Recovery loop: drive healthy requests through Execute ONLY. We never call
+	// Record() ourselves, and we never call Record() after a blocked Allow() — each
+	// probe is admitted and completed by Execute(). With the fix, completed probes
+	// release their in-flight slot so the next probe is admitted until the breaker
+	// accumulates SuccessThreshold successes and closes.
+	healthy := func() error { return nil }
+	deadline := time.Now().Add(2 * time.Second)
+	for cb.State() != CircuitClosed && time.Now().Before(deadline) {
+		if err := cb.Execute(healthy); err != nil && err != ErrCircuitOpen {
+			t.Fatalf("Execute(healthy) returned unexpected error: %v", err)
+		}
+	}
+
+	if cb.State() != CircuitClosed {
+		t.Fatalf("breaker did not recover: state = %v, want Closed", cb.State())
+	}
+
+	// Once closed, requests must flow again.
+	if err := cb.Execute(healthy); err != nil {
+		t.Fatalf("Execute(healthy) after recovery = %v, want nil", err)
+	}
+}
+
 // TestCircuitBreaker_Reset tests the Reset method.
 func TestCircuitBreaker_Reset(t *testing.T) {
 	cb := NewCircuitBreaker(CircuitBreakerConfig{
