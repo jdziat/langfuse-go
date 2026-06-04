@@ -78,8 +78,6 @@
 //	    // root-only fields are available via Config
 //	}
 //
-// [Client.RootConfig] is retained as a deprecated alias for [Client.Config].
-//
 // # Thread Safety
 //
 // The Client is safe for concurrent use. TraceContext and observation contexts

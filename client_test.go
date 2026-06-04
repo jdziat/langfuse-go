@@ -22,25 +22,24 @@ func TestNewClient(t *testing.T) {
 	}
 	defer client.Shutdown(context.Background())
 
-	if client.RootConfig().PublicKey != "pk-lf-test-key" {
-		t.Errorf("PublicKey = %v, want pk-lf-test-key", client.RootConfig().PublicKey)
+	if client.Config().PublicKey != "pk-lf-test-key" {
+		t.Errorf("PublicKey = %v, want pk-lf-test-key", client.Config().PublicKey)
 	}
-	if client.RootConfig().SecretKey != "sk-lf-test-key" {
-		t.Errorf("SecretKey = %v, want sk-lf-test-key", client.RootConfig().SecretKey)
+	if client.Config().SecretKey != "sk-lf-test-key" {
+		t.Errorf("SecretKey = %v, want sk-lf-test-key", client.Config().SecretKey)
 	}
-	if client.RootConfig().Region != RegionUS {
-		t.Errorf("Region = %v, want %v", client.RootConfig().Region, RegionUS)
+	if client.Config().Region != RegionUS {
+		t.Errorf("Region = %v, want %v", client.Config().Region, RegionUS)
 	}
-	if client.RootConfig().BatchSize != 50 {
-		t.Errorf("BatchSize = %v, want 50", client.RootConfig().BatchSize)
+	if client.Config().BatchSize != 50 {
+		t.Errorf("BatchSize = %v, want 50", client.Config().BatchSize)
 	}
 }
 
-// TestRootConfigPreservesRootOnlyFields verifies that RootConfig returns the
-// full root *Config, including root-only fields (such as EvaluationConfig) that
-// are not present on the field-lossy pkgclient.Config returned by the promoted
-// Config method inherited from the embedded *pkgclient.Client.
-func TestRootConfigPreservesRootOnlyFields(t *testing.T) {
+// TestConfigPreservesRootOnlyFields verifies that Config returns the full root
+// *Config, including root-only fields (such as EvaluationConfig) that live only
+// on the root configuration and not on the internal pkgclient.Config.
+func TestConfigPreservesRootOnlyFields(t *testing.T) {
 	evalCfg := &EvaluationConfig{
 		Mode:            EvaluationModeAuto,
 		DefaultWorkflow: WorkflowRAG,
@@ -59,14 +58,14 @@ func TestRootConfigPreservesRootOnlyFields(t *testing.T) {
 	}
 	defer client.Shutdown(context.Background())
 
-	got := client.RootConfig()
+	got := client.Config()
 	if got == nil {
-		t.Fatal("RootConfig() returned nil")
+		t.Fatal("Config() returned nil")
 	}
 
-	// Root-only field must round-trip through RootConfig.
+	// Root-only field must round-trip through Config.
 	if got.EvaluationConfig == nil {
-		t.Fatal("RootConfig().EvaluationConfig = nil, want non-nil (root-only field lost)")
+		t.Fatal("Config().EvaluationConfig = nil, want non-nil (root-only field lost)")
 	}
 	if got.EvaluationConfig.Mode != EvaluationModeAuto {
 		t.Errorf("EvaluationConfig.Mode = %v, want %v", got.EvaluationConfig.Mode, EvaluationModeAuto)

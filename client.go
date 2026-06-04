@@ -384,14 +384,6 @@ func (c *Client) Config() *Config {
 	return c.rootConfig
 }
 
-// RootConfig is a deprecated alias for Config.
-//
-// Deprecated: use Config instead. RootConfig is retained for backward
-// compatibility and returns the same full root *Config.
-func (c *Client) RootConfig() *Config {
-	return c.Config()
-}
-
 // PromptsWithOptions returns a configured prompts sub-client.
 // Options allow setting defaults like labels, versions, and caching.
 //

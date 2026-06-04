@@ -40,9 +40,8 @@ const (
 	EventTypeSDKLogForTest           = eventTypeSDKLog
 )
 
-// Config (and its deprecated alias RootConfig) is provided as an exported method
-// on *Client (see client.go); it returns the full, correctly-typed root *Config.
-// Tests use it directly.
+// Config is provided as an exported method on *Client (see client.go); it
+// returns the full, correctly-typed root *Config. Tests use it directly.
 
 // HandleError calls the internal handleRootError method for testing.
 func (c *Client) HandleError(err error) {

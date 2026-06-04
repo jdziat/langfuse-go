@@ -48,7 +48,7 @@ err = generation.EndWithUsage(ctx, "Hello!", 10, 8)
 ### After (v1 API)
 ```go
 // Create client with sensible defaults
-client := langfuse.NewClient("pk-xxx", "sk-xxx",
+client := langfuse.MustNew("pk-xxx", "sk-xxx",
     langfuse.WithRegion(langfuse.RegionUS),
     langfuse.WithDebug(true),
 )
@@ -80,7 +80,7 @@ generation, err = generation.End(ctx,
 
 | Before | After |
 |--------|-------|
-| `NewWithConfig(&Config{...})` | `NewClient(pubKey, secKey, opts...)` |
+| `NewWithConfig(&Config{...})` | `New(pubKey, secKey, opts...)` (or `MustNew` to panic on error) |
 | 25+ config fields | Essential fields + functional options |
 | Manual config validation | Automatic validation with defaults |
 
@@ -227,7 +227,9 @@ err = generation.AddScore(ctx, score)
 
 ### Step 1: Update Client Creation
 
-Replace `NewWithConfig` with `NewClient`:
+Use the functional-options constructor `New` (or `MustNew` to panic on error)
+instead of building a `Config` by hand. `NewWithConfig(&Config{...})` is still
+available when you prefer to pass a struct.
 
 ```go
 // OLD
@@ -240,7 +242,7 @@ client, err := langfuse.NewWithConfig(&langfuse.Config{
 })
 
 // NEW
-client := langfuse.NewClient("pk-xxx", "sk-xxx",
+client := langfuse.MustNew("pk-xxx", "sk-xxx",
     langfuse.WithRegion(langfuse.RegionUS),
     langfuse.WithDebug(true),
     // BatchSize and other options have sensible defaults
@@ -358,7 +360,7 @@ if err != nil {
 
 // Or use migration helpers to manually convert
 opts := legacy.MigrateConfig(oldConfig)
-client := langfuse.NewClient(oldConfig.PublicKey, oldConfig.SecretKey, opts...)
+client := langfuse.MustNew(oldConfig.PublicKey, oldConfig.SecretKey, opts...)
 ```
 
 ## Automated Migration
@@ -375,7 +377,7 @@ echo "Migrating Langfuse Go v0 to v1..."
 
 # 1. Replace client creation
 find . -name "*.go" -type f -exec sed -i \
-  's/langfuse\.NewWithConfig(\([^)]*\))/langfuse.NewClient(\1.PublicKey, \1.SecretKey)/g' {} \;
+  's/langfuse\.NewWithConfig(\([^)]*\))/langfuse.MustNew(\1.PublicKey, \1.SecretKey)/g' {} \;
 
 # 2. Replace trace creation patterns
 find . -name "*.go" -type f -exec sed -i \
@@ -452,7 +454,7 @@ trace.NewTrace(ctx, "name", langfuse.WithUserID("user123"))
 
 ### Migration Checklist
 
-- [ ] Update client creation to use `NewClient`
+- [ ] Update client creation to use `New` / `MustNew`
 - [ ] Replace all builder patterns with unified creation
 - [ ] Update all `Update().Apply()` calls to `Update()`
 - [ ] Ensure context is first parameter everywhere

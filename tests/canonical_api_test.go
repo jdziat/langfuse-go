@@ -23,13 +23,13 @@ func TestNewClient(t *testing.T) {
 	defer server.Close()
 
 	t.Run("creates client with valid credentials", func(t *testing.T) {
-		client := langfuse.NewClient("pk-lf-test-key", "sk-lf-test-key",
+		client := langfuse.MustNew("pk-lf-test-key", "sk-lf-test-key",
 			langfuse.WithBaseURL(server.URL),
 			langfuse.WithTimeout(5*time.Second),
 			langfuse.WithShutdownTimeout(10*time.Second),
 		)
 		if client == nil {
-			t.Fatal("NewClient returned nil")
+			t.Fatal("MustNew returned nil")
 		}
 		defer client.Shutdown(context.Background())
 
@@ -38,20 +38,25 @@ func TestNewClient(t *testing.T) {
 		}
 	})
 
-	t.Run("panics with empty credentials", func(t *testing.T) {
+	t.Run("MustNew panics with empty credentials", func(t *testing.T) {
 		defer func() {
 			if r := recover(); r == nil {
-				t.Error("NewClient should panic with empty credentials")
+				t.Error("MustNew should panic with empty credentials")
 			}
 		}()
-		_ = langfuse.NewClient("", "", langfuse.WithBaseURL(server.URL))
+		_ = langfuse.MustNew("", "", langfuse.WithBaseURL(server.URL))
 	})
 
-	t.Run("TryClient returns nil with empty credentials", func(t *testing.T) {
-		client := langfuse.TryClient("", "", langfuse.WithBaseURL(server.URL))
+	t.Run("New returns an error with empty credentials", func(t *testing.T) {
+		client, err := langfuse.New("", "", langfuse.WithBaseURL(server.URL))
+		if err == nil {
+			t.Error("New should return an error with empty credentials")
+			if client != nil {
+				client.Shutdown(context.Background())
+			}
+		}
 		if client != nil {
-			t.Error("TryClient should return nil with empty credentials")
-			client.Shutdown(context.Background())
+			t.Error("New should return a nil client on error")
 		}
 	})
 }
@@ -67,7 +72,7 @@ func TestScorerInterface(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := langfuse.NewClient("pk-lf-test-key", "sk-lf-test-key",
+	client := langfuse.MustNew("pk-lf-test-key", "sk-lf-test-key",
 		langfuse.WithBaseURL(server.URL),
 		langfuse.WithTimeout(5*time.Second),
 		langfuse.WithShutdownTimeout(10*time.Second),
@@ -159,7 +164,7 @@ func TestClientStats(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := langfuse.NewClient("pk-lf-test-key", "sk-lf-test-key",
+	client := langfuse.MustNew("pk-lf-test-key", "sk-lf-test-key",
 		langfuse.WithBaseURL(server.URL),
 		langfuse.WithTimeout(5*time.Second),
 		langfuse.WithShutdownTimeout(10*time.Second),
@@ -214,7 +219,7 @@ func TestWithObservation(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := langfuse.NewClient("pk-lf-test-key", "sk-lf-test-key",
+	client := langfuse.MustNew("pk-lf-test-key", "sk-lf-test-key",
 		langfuse.WithBaseURL(server.URL),
 		langfuse.WithTimeout(5*time.Second),
 		langfuse.WithShutdownTimeout(10*time.Second),

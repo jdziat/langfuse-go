@@ -1451,45 +1451,26 @@ func WithGeneration(ctx context.Context, trace *TraceContext, model string, inpu
 // Simplified Client Creation
 // ============================================================================
 
-// NewClient creates a new Langfuse client with a panic-on-error signature.
-// This function returns the client directly without an error.
+// MustNew is a convenience constructor that wraps [New] with a panic-on-error
+// signature, returning the client directly without an error.
 //
-// If configuration fails due to invalid credentials or other issues,
-// the function will panic. For explicit error handling, use New()
-// or NewWithConfig() instead.
+// If configuration fails due to invalid credentials or other issues, MustNew
+// panics. Use it only when initialization failures should be fatal (for example,
+// at program startup with credentials sourced from the environment). For explicit
+// error handling, use [New] or [NewWithConfig] instead.
 //
 // Example:
 //
-//	client := langfuse.NewClient("pk-lf-xxx", "sk-lf-xxx")
+//	client := langfuse.MustNew("pk-lf-xxx", "sk-lf-xxx")
 //	defer client.Shutdown(context.Background())
 //
 //	trace, _ := client.Trace(ctx, "user-request",
 //	    langfuse.WithUserID("user-123"))
-func NewClient(publicKey, secretKey string, opts ...ConfigOption) *Client {
+func MustNew(publicKey, secretKey string, opts ...ConfigOption) *Client {
 	client, err := New(publicKey, secretKey, opts...)
 	if err != nil {
-		panic("langfuse: NewClient failed: " + err.Error())
+		panic("langfuse: MustNew failed: " + err.Error())
 	}
-	return client
-}
-
-// MustClient is an alias for NewClient that clearly indicates it panics on error.
-// Use this when initialization failures should be fatal.
-func MustClient(publicKey, secretKey string, opts ...ConfigOption) *Client {
-	return NewClient(publicKey, secretKey, opts...)
-}
-
-// TryClient creates a new Langfuse client, returning nil if initialization fails.
-// Use this when you want optional observability that gracefully degrades.
-//
-// Example:
-//
-//	client := langfuse.TryClient("pk-lf-xxx", "sk-lf-xxx")
-//	if client != nil {
-//	    defer client.Shutdown(context.Background())
-//	}
-func TryClient(publicKey, secretKey string, opts ...ConfigOption) *Client {
-	client, _ := New(publicKey, secretKey, opts...)
 	return client
 }
 
