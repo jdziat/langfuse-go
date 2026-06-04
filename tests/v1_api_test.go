@@ -1,3 +1,5 @@
+//lint:file-ignore SA1019 This file intentionally exercises the deprecated V1 API surface to verify it still works for backward compatibility.
+
 package langfuse_test
 
 import (

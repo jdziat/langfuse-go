@@ -522,6 +522,12 @@ func BuildResultOk[T any](value T) BuildResult[T] {
 // ValidatedTraceBuilder wraps TraceBuilder with compile-time validation enforcement.
 // All setter methods immediately validate input and accumulate errors.
 // The Create method returns a BuildResult that must be unwrapped.
+//
+// Deprecated: enable StrictValidation (via [WithStrictValidationEnabled] or
+// [WithStrictValidation]) and use the standard builder [Client.NewTrace]. With
+// strict validation active, [TraceBuilder.Create] runs the same field
+// validation and returns the combined error, so this separate hierarchy is no
+// longer needed.
 type ValidatedTraceBuilder struct {
 	builder *TraceBuilder
 	errors  []error
@@ -529,7 +535,9 @@ type ValidatedTraceBuilder struct {
 }
 
 // NewValidatedTraceBuilder creates a new validated trace builder.
-// Use client.NewTraceStrict() instead of calling this directly.
+//
+// Deprecated: enable StrictValidation (via [WithStrictValidationEnabled] or
+// [WithStrictValidation]) and use the standard builder [Client.NewTrace].
 func NewValidatedTraceBuilder(client *Client) *ValidatedTraceBuilder {
 	return &ValidatedTraceBuilder{
 		builder: client.NewTrace(),
@@ -646,12 +654,20 @@ func (b *ValidatedTraceBuilder) Create(ctx context.Context) BuildResult[*TraceCo
 }
 
 // ValidatedSpanBuilder wraps SpanBuilder with compile-time validation enforcement.
+//
+// Deprecated: enable StrictValidation (via [WithStrictValidationEnabled] or
+// [WithStrictValidation]) and use the standard builder [TraceContext.NewSpan].
+// With strict validation active, [SpanBuilder.Create] runs the same field
+// validation and returns the combined error.
 type ValidatedSpanBuilder struct {
 	builder *SpanBuilder
 	errors  []error
 }
 
 // NewValidatedSpanBuilder creates a new validated span builder.
+//
+// Deprecated: enable StrictValidation (via [WithStrictValidationEnabled] or
+// [WithStrictValidation]) and use the standard builder [TraceContext.NewSpan].
 func NewValidatedSpanBuilder(trace *TraceContext) *ValidatedSpanBuilder {
 	return &ValidatedSpanBuilder{
 		builder: trace.NewSpan(),
@@ -743,12 +759,22 @@ func (b *ValidatedSpanBuilder) Create(ctx context.Context) BuildResult[*SpanCont
 }
 
 // ValidatedGenerationBuilder wraps GenerationBuilder with compile-time validation enforcement.
+//
+// Deprecated: enable StrictValidation (via [WithStrictValidationEnabled] or
+// [WithStrictValidation]) and use the standard builder
+// [TraceContext.NewGeneration]. With strict validation active,
+// [GenerationBuilder.Create] runs the same field validation and returns the
+// combined error.
 type ValidatedGenerationBuilder struct {
 	builder *GenerationBuilder
 	errors  []error
 }
 
 // NewValidatedGenerationBuilder creates a new validated generation builder.
+//
+// Deprecated: enable StrictValidation (via [WithStrictValidationEnabled] or
+// [WithStrictValidation]) and use the standard builder
+// [TraceContext.NewGeneration].
 func NewValidatedGenerationBuilder(trace *TraceContext) *ValidatedGenerationBuilder {
 	return &ValidatedGenerationBuilder{
 		builder: trace.NewGeneration(),
@@ -873,12 +899,20 @@ func (b *ValidatedGenerationBuilder) Create(ctx context.Context) BuildResult[*Ge
 }
 
 // ValidatedScoreBuilder wraps ScoreBuilder with compile-time validation enforcement.
+//
+// Deprecated: enable StrictValidation (via [WithStrictValidationEnabled] or
+// [WithStrictValidation]) and use the standard builder [TraceContext.NewScore].
+// With strict validation active, [ScoreBuilder.Create] runs the same field
+// validation and returns the combined error.
 type ValidatedScoreBuilder struct {
 	builder *ScoreBuilder
 	errors  []error
 }
 
 // NewValidatedScoreBuilder creates a new validated score builder.
+//
+// Deprecated: enable StrictValidation (via [WithStrictValidationEnabled] or
+// [WithStrictValidation]) and use the standard builder [TraceContext.NewScore].
 func NewValidatedScoreBuilder(trace *TraceContext) *ValidatedScoreBuilder {
 	return &ValidatedScoreBuilder{
 		builder: trace.NewScore(),

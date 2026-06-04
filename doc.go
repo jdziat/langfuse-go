@@ -3,6 +3,59 @@
 // Langfuse enables you to trace, monitor, and analyze LLM applications. This SDK
 // provides a fluent builder pattern for creating traces, spans, generations, and events.
 //
+// # Start Here
+//
+// The SDK offers several ways to create observations, but new code should use
+// the canonical, context-threaded fluent builders. These five symbols cover the
+// common path:
+//
+//   - [New] — construct a [Client] from your public and secret keys.
+//   - [Client.NewTrace] — start a trace; chain setters then Create(ctx).
+//   - [TraceContext.NewSpan] — add a span (a unit of work) to a trace.
+//   - [TraceContext.NewGeneration] — record an LLM generation on a trace.
+//   - [GenerationContext.EndWithUsage] — finish a generation with output and
+//     token usage.
+//
+// A complete, canonical example:
+//
+//	client, err := langfuse.New(
+//	    os.Getenv("LANGFUSE_PUBLIC_KEY"),
+//	    os.Getenv("LANGFUSE_SECRET_KEY"),
+//	)
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	defer client.Shutdown(context.Background())
+//
+//	ctx := context.Background()
+//
+//	trace, err := client.NewTrace().
+//	    Name("my-llm-call").
+//	    UserID("user-123").
+//	    Create(ctx)
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//
+//	gen, err := trace.NewGeneration().
+//	    Name("openai-completion").
+//	    Model("gpt-4").
+//	    Input("What is Go?").
+//	    Create(ctx)
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//
+//	// ... make your LLM call ...
+//
+//	if err := gen.EndWithUsage(ctx, "Go is a programming language...", 1500, 100); err != nil {
+//	    log.Printf("failed to end generation: %v", err)
+//	}
+//
+// Other surfaces (the Simple API methods such as [Client.Trace], the V1-suffixed
+// aliases, and the Validated* builders) remain supported but are documented as
+// secondary; prefer the symbols above.
+//
 // # Quick Start
 //
 // Create a client and start tracing:

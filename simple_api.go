@@ -1500,6 +1500,10 @@ func TryClient(publicKey, secretKey string, opts ...ConfigOption) *Client {
 // TraceV1 creates a new trace with context-first approach.
 // This is an alias for Trace() that matches the v1 API naming convention.
 //
+// Deprecated: use [Client.NewTrace] with the fluent builder
+// (client.NewTrace().Name(name)...Create(ctx)) or the [Client.Trace] Simple
+// API. The V1-suffixed aliases are retained only for backward compatibility.
+//
 // Example:
 //
 //	trace, err := client.TraceV1(ctx, "user-request",
@@ -1516,6 +1520,10 @@ func (c *Client) TraceV1(ctx context.Context, name string, opts ...TraceOption) 
 // NewSpanV1 creates a new span with context-first approach (v1 API).
 // This is an alias for Span() that matches the v1 API naming convention.
 //
+// Deprecated: use the fluent builder [TraceContext.NewSpan]
+// (trace.NewSpan().Name(name)...Create(ctx)) or the [TraceContext.Span] Simple
+// API. The V1-suffixed aliases are retained only for backward compatibility.
+//
 // Example:
 //
 //	span, err := trace.NewSpanV1(ctx, "processing",
@@ -1525,11 +1533,20 @@ func (t *TraceContext) NewSpanV1(ctx context.Context, name string, opts ...SpanO
 }
 
 // NewSpanV1 on SpanContext creates a child span with context-first approach (v1 API).
+//
+// Deprecated: use the fluent builder [SpanContext.NewSpan]
+// (span.NewSpan().Name(name)...Create(ctx)) or the [SpanContext.Span] Simple
+// API. The V1-suffixed aliases are retained only for backward compatibility.
 func (s *SpanContext) NewSpanV1(ctx context.Context, name string, opts ...SpanOption) (*SpanContext, error) {
 	return s.Span(ctx, name, opts...)
 }
 
 // NewSpanV1 on GenerationContext creates a child span with context-first approach (v1 API).
+//
+// Deprecated: use the fluent builder [GenerationContext.NewSpan]
+// (gen.NewSpan().Name(name)...Create(ctx)) or the [GenerationContext.Span]
+// Simple API. The V1-suffixed aliases are retained only for backward
+// compatibility.
 func (g *GenerationContext) NewSpanV1(ctx context.Context, name string, opts ...SpanOption) (*SpanContext, error) {
 	return g.Span(ctx, name, opts...)
 }
@@ -1541,6 +1558,11 @@ func (g *GenerationContext) NewSpanV1(ctx context.Context, name string, opts ...
 // NewGenerationV1 creates a new generation with context-first approach (v1 API).
 // This is an alias for Generation() that matches the v1 API naming convention.
 //
+// Deprecated: use the fluent builder [TraceContext.NewGeneration]
+// (trace.NewGeneration().Name(name)...Create(ctx)) or the
+// [TraceContext.Generation] Simple API. The V1-suffixed aliases are retained
+// only for backward compatibility.
+//
 // Example:
 //
 //	gen, err := trace.NewGenerationV1(ctx, "llm-call",
@@ -1551,11 +1573,21 @@ func (t *TraceContext) NewGenerationV1(ctx context.Context, name string, opts ..
 }
 
 // NewGenerationV1 on SpanContext creates a child generation (v1 API).
+//
+// Deprecated: use the fluent builder [SpanContext.NewGeneration]
+// (span.NewGeneration().Name(name)...Create(ctx)) or the
+// [SpanContext.Generation] Simple API. The V1-suffixed aliases are retained
+// only for backward compatibility.
 func (s *SpanContext) NewGenerationV1(ctx context.Context, name string, opts ...GenerationOption) (*GenerationContext, error) {
 	return s.Generation(ctx, name, opts...)
 }
 
 // NewGenerationV1 on GenerationContext creates a child generation (v1 API).
+//
+// Deprecated: use the fluent builder [GenerationContext.NewGeneration]
+// (gen.NewGeneration().Name(name)...Create(ctx)) or the
+// [GenerationContext.Generation] Simple API. The V1-suffixed aliases are
+// retained only for backward compatibility.
 func (g *GenerationContext) NewGenerationV1(ctx context.Context, name string, opts ...GenerationOption) (*GenerationContext, error) {
 	return g.Generation(ctx, name, opts...)
 }
@@ -1566,6 +1598,11 @@ func (g *GenerationContext) NewGenerationV1(ctx context.Context, name string, op
 
 // NewEventV1 creates a new event with context-first approach (v1 API).
 //
+// Deprecated: use the fluent builder [TraceContext.NewEvent]
+// (trace.NewEvent().Name(name)...Create(ctx)) or the [TraceContext.Event]
+// Simple API. The V1-suffixed aliases are retained only for backward
+// compatibility.
+//
 // Example:
 //
 //	err := trace.NewEventV1(ctx, "cache-hit",
@@ -1575,11 +1612,20 @@ func (t *TraceContext) NewEventV1(ctx context.Context, name string, opts ...Even
 }
 
 // NewEventV1 on SpanContext creates a child event (v1 API).
+//
+// Deprecated: use the fluent builder [SpanContext.NewEvent]
+// (span.NewEvent().Name(name)...Create(ctx)) or the [SpanContext.Event] Simple
+// API. The V1-suffixed aliases are retained only for backward compatibility.
 func (s *SpanContext) NewEventV1(ctx context.Context, name string, opts ...EventOption) error {
 	return s.Event(ctx, name, opts...)
 }
 
 // NewEventV1 on GenerationContext creates a child event (v1 API).
+//
+// Deprecated: use the fluent builder [GenerationContext.NewEvent]
+// (gen.NewEvent().Name(name)...Create(ctx)) or the [GenerationContext.Event]
+// Simple API. The V1-suffixed aliases are retained only for backward
+// compatibility.
 func (g *GenerationContext) NewEventV1(ctx context.Context, name string, opts ...EventOption) error {
 	return g.Event(ctx, name, opts...)
 }
@@ -1684,6 +1730,10 @@ func WithUpdatePublic(public bool) UpdateOption {
 // UpdateV1 updates the trace with the provided options and returns the trace context.
 // This provides a unified, consistent API for updates.
 //
+// Deprecated: use the fluent updater [TraceContext.Update]
+// (trace.Update().Output(...).Apply(ctx)). The V1-suffixed aliases are retained
+// only for backward compatibility.
+//
 // Example:
 //
 //	trace, err = trace.UpdateV1(ctx,
@@ -1736,6 +1786,10 @@ func (t *TraceContext) UpdateV1(ctx context.Context, opts ...UpdateOption) (*Tra
 // EndV1 ends the span with the provided options and returns the span context.
 // This provides a consistent (result, error) return pattern.
 //
+// Deprecated: use [SpanContext.EndWith] (span.EndWith(ctx, WithOutput(...))),
+// which returns an [EndResult]. The V1-suffixed aliases are retained only for
+// backward compatibility.
+//
 // Example:
 //
 //	span, err := span.EndV1(ctx,
@@ -1751,6 +1805,11 @@ func (s *SpanContext) EndV1(ctx context.Context, opts ...EndOption) (*SpanContex
 
 // EndV1 ends the generation with the provided options and returns the generation context.
 // This provides a consistent (result, error) return pattern.
+//
+// Deprecated: use [GenerationContext.EndWithUsage]
+// (gen.EndWithUsage(ctx, output, inputTokens, outputTokens)) or
+// [GenerationContext.EndWith], which returns an [EndResult]. The V1-suffixed
+// aliases are retained only for backward compatibility.
 //
 // Example:
 //
@@ -1929,11 +1988,18 @@ func (g *GenerationContext) ScoreCategory(ctx context.Context, name string, valu
 
 // TraceContextV1 is an extended trace context that provides v1 API methods.
 // It wraps TraceContext and adds the NewXxx naming convention methods.
+//
+// Deprecated: use [TraceContext] directly with the canonical fluent builders
+// ([TraceContext.NewSpan], [TraceContext.NewGeneration], [TraceContext.NewEvent]).
+// This wrapper is retained only for backward compatibility.
 type TraceContextV1 struct {
 	*TraceContext
 }
 
 // WrapTraceContext wraps a TraceContext to provide v1 API naming.
+//
+// Deprecated: use [TraceContext] directly with the canonical fluent builders.
+// This wrapper is retained only for backward compatibility.
 func WrapTraceContext(t *TraceContext) *TraceContextV1 {
 	return &TraceContextV1{TraceContext: t}
 }
