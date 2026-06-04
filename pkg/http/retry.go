@@ -177,8 +177,10 @@ func (e *ExponentialBackoff) ShouldRetry(attempt int, err error) bool {
 		return false
 	}
 
-	// Check if the error implements RetryableError interface
-	if retryableErr, ok := err.(RetryableError); ok {
+	// Check if the error implements RetryableError interface.
+	// Use errors.As so wrapped errors (fmt.Errorf("...: %w", err)) are detected.
+	var retryableErr RetryableError
+	if errors.As(err, &retryableErr) {
 		return retryableErr.IsRetryable()
 	}
 
@@ -195,8 +197,10 @@ func (e *ExponentialBackoff) RetryDelay(attempt int) time.Duration {
 // If the error implements RetryAfterError with a SuggestedRetryAfter value from the server,
 // that value is used (capped at MaxDelay).
 func (e *ExponentialBackoff) RetryDelayWithError(attempt int, err error) time.Duration {
-	// Check if error has a Retry-After hint from the server
-	if retryAfterErr, ok := err.(RetryAfterError); ok {
+	// Check if error has a Retry-After hint from the server.
+	// Use errors.As so wrapped errors (fmt.Errorf("...: %w", err)) are detected.
+	var retryAfterErr RetryAfterError
+	if errors.As(err, &retryAfterErr) {
 		retryAfter := retryAfterErr.SuggestedRetryAfter()
 		if retryAfter > 0 {
 			maxDelay := e.MaxDelay
@@ -282,8 +286,10 @@ func (f *FixedDelay) ShouldRetry(attempt int, err error) bool {
 		return false
 	}
 
-	// Check if the error implements RetryableError interface
-	if retryableErr, ok := err.(RetryableError); ok {
+	// Check if the error implements RetryableError interface.
+	// Use errors.As so wrapped errors (fmt.Errorf("...: %w", err)) are detected.
+	var retryableErr RetryableError
+	if errors.As(err, &retryableErr) {
 		return retryableErr.IsRetryable()
 	}
 
@@ -327,8 +333,10 @@ func (l *LinearBackoff) ShouldRetry(attempt int, err error) bool {
 		return false
 	}
 
-	// Check if the error implements RetryableError interface
-	if retryableErr, ok := err.(RetryableError); ok {
+	// Check if the error implements RetryableError interface.
+	// Use errors.As so wrapped errors (fmt.Errorf("...: %w", err)) are detected.
+	var retryableErr RetryableError
+	if errors.As(err, &retryableErr) {
 		return retryableErr.IsRetryable()
 	}
 

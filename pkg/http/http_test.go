@@ -2,6 +2,7 @@ package http
 
 import (
 	"errors"
+	"fmt"
 	"net/url"
 	"sync/atomic"
 	"testing"
@@ -35,6 +36,26 @@ func (e *mockRetryAfterError) SuggestedRetryAfter() time.Duration {
 
 func (e *mockRetryAfterError) IsRetryable() bool {
 	return true
+}
+
+// mockAPIError models a server APIError (e.g. a 503) that carries both
+// retryability and a Retry-After hint, mirroring pkg/errors.APIError. It is used
+// to verify retry detection survives error wrapping via fmt.Errorf("...: %w", err).
+type mockAPIError struct {
+	statusCode int
+	retryAfter time.Duration
+}
+
+func (e *mockAPIError) Error() string {
+	return fmt.Sprintf("API error: status %d", e.statusCode)
+}
+
+func (e *mockAPIError) IsRetryable() bool {
+	return e.statusCode == 429 || (e.statusCode >= 500 && e.statusCode < 600)
+}
+
+func (e *mockAPIError) SuggestedRetryAfter() time.Duration {
+	return e.retryAfter
 }
 
 // TestExponentialBackoff_ShouldRetry tests the ShouldRetry method.
@@ -179,6 +200,62 @@ func TestExponentialBackoff_RetryDelayWithError(t *testing.T) {
 				t.Errorf("RetryDelayWithError(%d, %v) = %v, expected %v", tt.attempt, tt.err, result, tt.expected)
 			}
 		})
+	}
+}
+
+// TestExponentialBackoff_WrappedRetryableError verifies that retry detection
+// survives error wrapping. A retryable 503 APIError carrying a Retry-After is
+// wrapped via fmt.Errorf("...: %w", err); both ShouldRetry and
+// RetryDelayWithError must still see through the wrapper via errors.As.
+//
+// Before the errors.As fix (bare type assertions err.(RetryableError) /
+// err.(RetryAfterError)), the wrapped error is no longer the concrete type, so
+// ShouldRetry would fall back to IsRetryableNetworkError (false) and
+// RetryDelayWithError would ignore the Retry-After and return the calculated
+// backoff instead.
+func TestExponentialBackoff_WrappedRetryableError(t *testing.T) {
+	backoff := &ExponentialBackoff{
+		InitialDelay: 100 * time.Millisecond,
+		MaxDelay:     1 * time.Second,
+		Multiplier:   2.0,
+		Jitter:       false,
+		MaxRetries:   3,
+	}
+
+	apiErr := &mockAPIError{statusCode: 503, retryAfter: 500 * time.Millisecond}
+	wrapped := fmt.Errorf("request failed: %w", apiErr)
+
+	// Sanity check: the wrapper is not the concrete type, so a bare assertion
+	// would miss it.
+	if _, ok := wrapped.(RetryableError); ok {
+		t.Fatal("expected wrapped error to NOT satisfy a bare RetryableError assertion")
+	}
+
+	// ShouldRetry must classify the wrapped retryable error as retryable.
+	if !backoff.ShouldRetry(0, wrapped) {
+		t.Error("ShouldRetry(0, wrapped 503) = false, expected true")
+	}
+
+	// RetryDelayWithError must honor the server's Retry-After through the wrapper.
+	if got := backoff.RetryDelayWithError(0, wrapped); got != 500*time.Millisecond {
+		t.Errorf("RetryDelayWithError(0, wrapped) = %v, expected 500ms (server Retry-After)", got)
+	}
+}
+
+// TestRetryStrategies_WrappedRetryableError verifies FixedDelay and
+// LinearBackoff also see through wrapped retryable errors via errors.As.
+func TestRetryStrategies_WrappedRetryableError(t *testing.T) {
+	apiErr := &mockAPIError{statusCode: 503}
+	wrapped := fmt.Errorf("request failed: %w", apiErr)
+
+	fd := NewFixedDelay(100*time.Millisecond, 3)
+	if !fd.ShouldRetry(0, wrapped) {
+		t.Error("FixedDelay.ShouldRetry(0, wrapped 503) = false, expected true")
+	}
+
+	lb := NewLinearBackoff(100*time.Millisecond, 50*time.Millisecond, 3)
+	if !lb.ShouldRetry(0, wrapped) {
+		t.Error("LinearBackoff.ShouldRetry(0, wrapped 503) = false, expected true")
 	}
 }
 
