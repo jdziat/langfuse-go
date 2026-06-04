@@ -237,14 +237,25 @@ func (e *ExponentialBackoff) calculateDelay(attempt int) time.Duration {
 	}
 
 	delay := float64(initialDelay) * math.Pow(multiplier, float64(attempt))
+
+	if e.Jitter {
+		// Add jitter: delay * random(0.5, 1.5) to prevent thundering herd.
+		jitterFactor := 0.5 + rand.Float64()
+		delay *= jitterFactor
+	}
+
+	// Cap at MaxDelay AFTER jitter so MaxDelay is a true upper bound. Capping
+	// before jitter would let the random factor push the effective delay up to
+	// ~1.5x MaxDelay.
 	if delay > float64(maxDelay) {
 		delay = float64(maxDelay)
 	}
 
-	if e.Jitter {
-		// Add jitter: delay * random(0.5, 1.5)
-		jitterFactor := 0.5 + rand.Float64()
-		delay *= jitterFactor
+	// Guard against a zero/negative delay from extreme inputs (e.g. a tiny
+	// InitialDelay combined with the low end of the jitter range). A retry
+	// should always wait a positive amount of time.
+	if delay < 1 {
+		delay = 1
 	}
 
 	return time.Duration(delay)

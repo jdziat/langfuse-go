@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -154,6 +155,55 @@ func TestExponentialBackoff_RetryDelay(t *testing.T) {
 				t.Errorf("RetryDelay(%d) = %v, expected %v", tt.attempt, result, tt.expected)
 			}
 		})
+	}
+}
+
+// TestExponentialBackoff_JitterNeverExceedsMaxDelay verifies that MaxDelay is a
+// true upper bound even with jitter enabled. The cap is applied AFTER jitter, so
+// across many samples at/above MaxDelay the returned delay must never exceed
+// MaxDelay and must always be positive.
+func TestExponentialBackoff_JitterNeverExceedsMaxDelay(t *testing.T) {
+	backoff := &ExponentialBackoff{
+		InitialDelay: 100 * time.Millisecond,
+		MaxDelay:     1 * time.Second,
+		Multiplier:   2.0,
+		Jitter:       true,
+		MaxRetries:   10,
+	}
+
+	maxDelay := 1 * time.Second
+	// Use high attempt numbers so the pre-jitter delay is already at/above
+	// MaxDelay; with the old code the 1.5x jitter factor would push it to ~1.5s.
+	for _, attempt := range []int{5, 6, 7, 8, 9, 10, 20} {
+		for i := 0; i < 1000; i++ {
+			d := backoff.RetryDelay(attempt)
+			if d > maxDelay {
+				t.Fatalf("RetryDelay(%d) = %v exceeds MaxDelay %v", attempt, d, maxDelay)
+			}
+			if d <= 0 {
+				t.Fatalf("RetryDelay(%d) = %v, expected a positive delay", attempt, d)
+			}
+		}
+	}
+}
+
+// TestExponentialBackoff_JitterTinyDelayStaysPositive verifies the floor guard:
+// even with a sub-nanosecond InitialDelay and the low end of the jitter range,
+// the returned delay is never zero or negative.
+func TestExponentialBackoff_JitterTinyDelayStaysPositive(t *testing.T) {
+	backoff := &ExponentialBackoff{
+		InitialDelay: 1, // 1 nanosecond
+		MaxDelay:     1 * time.Second,
+		Multiplier:   2.0,
+		Jitter:       true,
+		MaxRetries:   10,
+	}
+
+	for i := 0; i < 1000; i++ {
+		d := backoff.RetryDelay(0)
+		if d <= 0 {
+			t.Fatalf("RetryDelay(0) = %v, expected a positive delay", d)
+		}
 	}
 }
 
@@ -430,6 +480,75 @@ func TestCircuitBreaker_Reset(t *testing.T) {
 	}
 	if cb.ConsecutiveErrors() != 0 {
 		t.Errorf("ConsecutiveErrors() = %d, expected 0", cb.ConsecutiveErrors())
+	}
+}
+
+// captureLogger is a Logger that records formatted messages for assertions.
+type captureLogger struct {
+	mu   sync.Mutex
+	msgs []string
+}
+
+func (l *captureLogger) Printf(format string, v ...any) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.msgs = append(l.msgs, fmt.Sprintf(format, v...))
+}
+
+func (l *captureLogger) count() int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return len(l.msgs)
+}
+
+// TestCircuitBreaker_PanickingCallbackDoesNotCrash verifies that an
+// OnStateChange callback that panics does not crash the breaker, that state
+// transitions still occur, and that the panic is routed to the configured
+// Logger. The callback must not run under the breaker lock, so even though it
+// blocks/panics, breaker methods remain usable (no deadlock).
+func TestCircuitBreaker_PanickingCallbackDoesNotCrash(t *testing.T) {
+	logger := &captureLogger{}
+	var calls atomic.Int32
+
+	cb := NewCircuitBreaker(CircuitBreakerConfig{
+		FailureThreshold: 2,
+		Timeout:          50 * time.Millisecond,
+		Logger:           logger,
+		OnStateChange: func(from, to CircuitState) {
+			calls.Add(1)
+			panic("boom in user callback")
+		},
+	})
+
+	// Drive the breaker open; this triggers the panicking callback.
+	cb.Record(errors.New("error 1"))
+	cb.Record(errors.New("error 2"))
+
+	// The transition must have occurred despite the panicking callback.
+	if cb.State() != CircuitOpen {
+		t.Fatalf("State after 2 failures = %v, expected %v", cb.State(), CircuitOpen)
+	}
+
+	// The breaker is not deadlocked: lock-taking methods still respond.
+	if cb.Allow() {
+		t.Error("Allow() returned true for open circuit")
+	}
+
+	// Wait for the detached callback goroutine to run and recover.
+	deadline := time.Now().Add(time.Second)
+	for calls.Load() == 0 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if calls.Load() == 0 {
+		t.Fatal("OnStateChange callback was never invoked")
+	}
+
+	// The recovered panic must have been routed to the logger.
+	for logger.count() == 0 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if logger.count() == 0 {
+		t.Error("expected recovered panic to be reported via Logger")
 	}
 }
 
