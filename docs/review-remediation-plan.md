@@ -197,3 +197,39 @@ implementers) scoring against A criteria.
 
 ## Still out of scope
 - Moving to a `/v2` module path (staying on v1 by choice).
+
+---
+
+# Round 3 — Close the last gaps to straight A's
+
+Round 2 independent re-grade: **API Design A−, Engineering A, Docs/Trust B+ (regressed), Overall A−.**
+Goal: a clean **A** in every section. The graders gave an exact, confirmed roadmap.
+
+## API Design (A− → A)
+
+### R3-A1 — Prune client constructors + drop the RootConfig alias
+- **Files:** `client.go`, `lifecycle.go`, `options.go`, referencing tests/examples/docs.
+- **Fix:** consolidate the five constructors (`New`, `NewWithConfig`, `NewClient`, `MustClient`, `TryClient`) to a tight canonical set (keep `New` + `NewWithConfig`; remove or fold the rest — breaking OK). Remove the deprecated `RootConfig` alias now that `Config()` returns the root type. Update every reference.
+- **Acceptance:** minimal constructor set; no `RootConfig`; no dangling refs; build/vet/staticcheck/`-race` green.
+
+### R3-A2 — DRY the Simple API + rank it clearly secondary
+- **Files:** `simple_api.go`, `doc.go`.
+- **Fix:** extract shared apply helpers so the ~1600 lines of near-identical per-context (`Trace`/`Span`/`Generation`/`Event`) option-apply loops collapse to one path; the `WithXxx` duplication shrinks. Make godoc unambiguous that the fluent builders are canonical and `Trace(ctx,…)`/helpers are convenience.
+- **Acceptance:** simple_api.go materially smaller with no behavior change; one clearly-canonical path in docs; green gates.
+
+## Docs / Trust (B+ → A)
+
+### R3-D1 — Close the doc-gate blind spot + fix all compile rot
+- **Files:** `scripts/check-doc-snippets.sh`, `evaluation/doc.go`, any other `**/doc.go`, `.github/workflows/ci.yml`.
+- **Fix:** extend `DOC_GLOBS` to scan subpackage `doc.go` files (`**/doc.go`); fix every `go` block it surfaces (e.g. `evaluation/doc.go` `Create(ctx)`/`UpdateOutput(ctx,…)`). Demonstrate the gate would have failed before the fix.
+- **Depends on:** R3-A1, R3-A2.
+- **Acceptance:** gate covers subpackage doc.go and passes; the previously-broken examples now compile under it.
+
+### R3-D2 — Fix prose/structural doc inaccuracies
+- **Files:** `README.md`, `content/docs/*.md`.
+- **Fix:** rewrite README "Package Structure" to the real tree (no phantom `queue.go`/`errors_*.go`/`helpers.go`); audit documented defaults/values against source and correct them (`WithFlushInterval` → 5s, etc.).
+- **Depends on:** R3-A1, R3-A2.
+- **Acceptance:** file map matches the real tree; documented defaults match code.
+
+## Final
+Full validation + an independent Design-Visionary + 10x re-grade. Confirm Engineering stays A and API/Docs reach a clean A.
