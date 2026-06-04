@@ -43,6 +43,7 @@ type httpClient struct {
 	debug          bool
 	circuitBreaker *pkghttp.CircuitBreaker
 	hook           HTTPHook
+	userAgent      string
 }
 
 // newHTTPClient creates a new HTTP client.
@@ -61,6 +62,14 @@ func newHTTPClient(cfg *Config) *httpClient {
 		}
 	}
 
+	// Resolve the SDK version for the User-Agent. Prefer the version injected
+	// via Config (set by the root langfuse package from its embedded VERSION
+	// file) and fall back to the package-level Version constant when unset.
+	version := cfg.Version
+	if version == "" {
+		version = Version
+	}
+
 	h := &httpClient{
 		client:        cfg.HTTPClient,
 		baseURL:       strings.TrimSuffix(cfg.BaseURL, "/"),
@@ -71,6 +80,7 @@ func newHTTPClient(cfg *Config) *httpClient {
 		retryStrategy: retryStrategy,
 		debug:         cfg.Debug,
 		hook:          combineHooks(cfg.HTTPHooks),
+		userAgent:     "langfuse-go/" + version,
 	}
 
 	// Initialize circuit breaker if configured
@@ -198,7 +208,7 @@ func (h *httpClient) doOnce(ctx context.Context, req *request) error {
 	httpReq.Header.Set("Authorization", h.authHeader)
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Accept", "application/json")
-	httpReq.Header.Set("User-Agent", "langfuse-go/"+Version)
+	httpReq.Header.Set("User-Agent", h.userAgent)
 	httpReq.Header.Set("X-Request-ID", requestID)
 
 	// Check if context has a request ID override

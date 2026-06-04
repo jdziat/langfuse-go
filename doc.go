@@ -132,6 +132,18 @@
 //   - examples/evaluation: RAG and Q&A evaluation workflows
 package langfuse
 
+import (
+	_ "embed"
+	"strings"
+)
+
+//go:embed VERSION
+var versionFile string
+
 // Version is the current SDK version.
 // This is used in User-Agent headers and for debugging.
-const Version = "1.0.0"
+//
+// The value is sourced from the VERSION file at the module root (embedded at
+// build time) so that the version is defined in a single place and stays in
+// sync with releases.
+var Version = strings.TrimSpace(versionFile)

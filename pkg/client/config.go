@@ -180,6 +180,12 @@ type Config struct {
 	// MaxBackgroundSenders limits concurrent background batch senders.
 	// Prevents unbounded goroutine creation under sustained load. Default is 10.
 	MaxBackgroundSenders int
+
+	// Version is the SDK version reported in the User-Agent header.
+	// When empty, the request falls back to the package-level Version constant.
+	// The root langfuse package injects its embedded Version here so the
+	// User-Agent reflects the released module version.
+	Version string
 }
 
 // IDGenerationMode controls how IDs are generated.

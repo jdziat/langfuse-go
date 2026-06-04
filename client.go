@@ -138,6 +138,7 @@ func convertToPkgClientConfig(cfg *Config) *pkgclient.Config {
 		BlockOnQueueFull:     cfg.BlockOnQueueFull,
 		DropOnQueueFull:      cfg.DropOnQueueFull,
 		MaxBackgroundSenders: cfg.MaxBackgroundSenders,
+		Version:              Version,
 	}
 
 	// Logger, StructuredLogger, and Metrics are type aliases to pkgclient versions,
