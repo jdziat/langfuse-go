@@ -174,6 +174,12 @@ func convertToPkgClientConfig(cfg *Config) *pkgclient.Config {
 		pkgCfg.HTTPHooks = cfg.HTTPHooks
 	}
 
+	// ClassifiedHooks can be assigned directly since both root ClassifiedHook and
+	// pkgclient.ClassifiedHook are aliases to pkghttp.ClassifiedHook - they're the same type.
+	if len(cfg.ClassifiedHooks) > 0 {
+		pkgCfg.ClassifiedHooks = cfg.ClassifiedHooks
+	}
+
 	// Convert BackpressureConfig
 	if cfg.BackpressureConfig != nil {
 		pkgCfg.BackpressureConfig = cfg.BackpressureConfig
