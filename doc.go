@@ -52,42 +52,9 @@
 //	    log.Printf("failed to end generation: %v", err)
 //	}
 //
-// Other surfaces (the Simple API methods such as [Client.Trace]) remain
-// supported but are documented as secondary; prefer the symbols above.
-//
-// # Quick Start
-//
-// Create a client and start tracing:
-//
-//	client, err := langfuse.New(
-//	    os.Getenv("LANGFUSE_PUBLIC_KEY"),
-//	    os.Getenv("LANGFUSE_SECRET_KEY"),
-//	)
-//	if err != nil {
-//	    log.Fatal(err)
-//	}
-//	defer client.Shutdown(context.Background())
-//
-//	ctx := context.Background()
-//
-//	// Create a trace
-//	trace, err := client.NewTrace().
-//	    Name("my-llm-call").
-//	    UserID("user-123").
-//	    Create(ctx)
-//
-//	// Record an LLM generation
-//	gen, err := trace.NewGeneration().
-//	    Name("openai-completion").
-//	    Model("gpt-4").
-//	    Input("What is Go?").
-//	    Create(ctx)
-//
-//	// ... make your LLM call ...
-//
-//	if err := gen.EndWithUsage(ctx, "Go is a programming language...", 1500, 100); err != nil {
-//	    log.Printf("failed to end generation: %v", err)
-//	}
+// For a one-line convenience over the fluent builder, [Client.Trace] creates a
+// trace from a context, a name, and [TraceOption] functions. The fluent
+// builders shown above are the canonical path; prefer them for new code.
 //
 // # Configuration
 //
