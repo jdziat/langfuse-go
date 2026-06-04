@@ -1732,6 +1732,7 @@ func (b *SpanBuilder) Create(ctx context.Context) (*SpanContext, error) {
 	return &SpanContext{
 		TraceContext: b.ctx,
 		spanID:       b.span.ID,
+		startTime:    time.Now(),
 	}, nil
 }
 
@@ -1743,6 +1744,9 @@ func (b *SpanBuilder) Create(ctx context.Context) (*SpanContext, error) {
 type SpanContext struct {
 	*TraceContext
 	spanID string
+	// startTime records when the span context was created, captured with a
+	// monotonic clock reading so EndWith can report an accurate duration.
+	startTime time.Time
 }
 
 // SpanID returns the span ID.
@@ -1821,9 +1825,13 @@ func (s *SpanContext) EndWith(ctx context.Context, opts ...EndOption) EndResult 
 
 	err := update.Apply(ctx)
 
-	return EndResult{
+	result := EndResult{
 		Error: err,
 	}
+	if !s.startTime.IsZero() {
+		result.Duration = time.Since(s.startTime)
+	}
+	return result
 }
 
 // NewSpan creates a child span builder (Advanced API).
@@ -2336,6 +2344,7 @@ func (b *GenerationBuilder) Create(ctx context.Context) (*GenerationContext, err
 	return &GenerationContext{
 		TraceContext: b.ctx,
 		genID:        b.gen.ID,
+		startTime:    time.Now(),
 	}, nil
 }
 
@@ -2347,6 +2356,9 @@ func (b *GenerationBuilder) Create(ctx context.Context) (*GenerationContext, err
 type GenerationContext struct {
 	*TraceContext
 	genID string
+	// startTime records when the generation context was created, captured with
+	// a monotonic clock reading so EndWith can report an accurate duration.
+	startTime time.Time
 }
 
 // GenerationID returns the generation ID.
@@ -2441,9 +2453,13 @@ func (g *GenerationContext) EndWith(ctx context.Context, opts ...EndOption) EndR
 
 	err := update.Apply(ctx)
 
-	return EndResult{
+	result := EndResult{
 		Error: err,
 	}
+	if !g.startTime.IsZero() {
+		result.Duration = time.Since(g.startTime)
+	}
+	return result
 }
 
 // NewScore creates a score builder for this generation (Advanced API).

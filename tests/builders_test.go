@@ -365,6 +365,109 @@ func TestGenerationEndWith(t *testing.T) {
 	})
 }
 
+func TestSpanEndWithDuration(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/public/ingestion" {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(langfuse.IngestionResult{
+				Successes: []langfuse.IngestionSuccess{{ID: "1", Status: 200}},
+			})
+		}
+	}))
+	defer server.Close()
+
+	client, err := langfuse.New(
+		"pk-lf-test-key",
+		"sk-lf-test-key",
+		langfuse.WithBaseURL(server.URL),
+		langfuse.WithTimeout(5*time.Second),
+		langfuse.WithShutdownTimeout(10*time.Second),
+	)
+	if err != nil {
+		t.Fatalf("New failed: %v", err)
+	}
+	defer client.Shutdown(context.Background())
+
+	ctx := context.Background()
+
+	trace, err := client.NewTrace().Name("test").Create(ctx)
+	if err != nil {
+		t.Fatalf("Create trace failed: %v", err)
+	}
+
+	span, err := trace.NewSpan().Name("timed-span").Create(ctx)
+	if err != nil {
+		t.Fatalf("Create span failed: %v", err)
+	}
+
+	const sleep = 10 * time.Millisecond
+	time.Sleep(sleep)
+
+	result := span.EndWith(ctx, langfuse.WithOutput("result"))
+	if !result.Ok() {
+		t.Fatalf("EndWith failed: %v", result.Error)
+	}
+	if result.Duration <= 0 {
+		t.Errorf("expected positive Duration, got %v", result.Duration)
+	}
+	if result.Duration < sleep {
+		t.Errorf("expected Duration >= %v, got %v", sleep, result.Duration)
+	}
+}
+
+func TestGenerationEndWithDuration(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/public/ingestion" {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(langfuse.IngestionResult{
+				Successes: []langfuse.IngestionSuccess{{ID: "1", Status: 200}},
+			})
+		}
+	}))
+	defer server.Close()
+
+	client, err := langfuse.New(
+		"pk-lf-test-key",
+		"sk-lf-test-key",
+		langfuse.WithBaseURL(server.URL),
+		langfuse.WithTimeout(5*time.Second),
+		langfuse.WithShutdownTimeout(10*time.Second),
+	)
+	if err != nil {
+		t.Fatalf("New failed: %v", err)
+	}
+	defer client.Shutdown(context.Background())
+
+	ctx := context.Background()
+
+	trace, err := client.NewTrace().Name("test").Create(ctx)
+	if err != nil {
+		t.Fatalf("Create trace failed: %v", err)
+	}
+
+	gen, err := trace.NewGeneration().Name("timed-call").Model("gpt-4").Create(ctx)
+	if err != nil {
+		t.Fatalf("Create generation failed: %v", err)
+	}
+
+	const sleep = 10 * time.Millisecond
+	time.Sleep(sleep)
+
+	result := gen.EndWith(ctx,
+		langfuse.WithOutput("Generated response"),
+		langfuse.WithUsage(100, 50),
+	)
+	if !result.Ok() {
+		t.Fatalf("EndWith failed: %v", result.Error)
+	}
+	if result.Duration <= 0 {
+		t.Errorf("expected positive Duration, got %v", result.Duration)
+	}
+	if result.Duration < sleep {
+		t.Errorf("expected Duration >= %v, got %v", sleep, result.Duration)
+	}
+}
+
 func TestBatchTraceBuilder(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/api/public/ingestion" {
