@@ -42,10 +42,10 @@ func newStrictTestClient(t *testing.T, server *httptest.Server, strict bool) *Cl
 	return client
 }
 
-// overlongName is longer than MaxNameLength so ValidateName (used by the
-// Validated* builders) rejects it, while the standard builders' Name() setters
-// accept it without complaint. It is therefore input "the Validated* path
-// rejects" but the standard path historically accepted.
+// overlongName is longer than MaxNameLength so ValidateName (run by the strict
+// validation path) rejects it, while the standard builders' Name() setters
+// accept it without complaint. It is therefore input the strict path rejects
+// but the standard path accepts when strict validation is off.
 var overlongName = strings.Repeat("x", MaxNameLength+1)
 
 // TestStrictValidation_TraceBuilder_Create verifies that the standard
@@ -116,8 +116,8 @@ func TestStrictValidation_SpanBuilder_Create(t *testing.T) {
 
 // TestStrictValidation_GenerationBuilder_Create verifies the strict-on/strict-off
 // contract for the standard GenerationBuilder, including a negative-usage value
-// (rejected by ValidatedGenerationBuilder.UsageDetails) that the standard path
-// would otherwise accept.
+// (rejected by the strict usage validation) that the standard path would
+// otherwise accept.
 func TestStrictValidation_GenerationBuilder_Create(t *testing.T) {
 	server := newStrictTestServer(t)
 	defer server.Close()

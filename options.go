@@ -454,8 +454,9 @@ func WithMaxBackgroundSenders(n int) ConfigOption {
 }
 
 // WithStrictValidation enables strict validation mode.
-// When enabled, validated builders accumulate errors and force explicit
-// error handling via BuildResult types.
+// When enabled, the standard builders run additional field-level validation in
+// Create and return the combined error instead of silently accepting invalid
+// input.
 //
 // Example:
 //
@@ -480,13 +481,10 @@ func WithStrictValidation(config StrictValidationConfig) ConfigOption {
 //	    langfuse.WithStrictValidationEnabled(),
 //	)
 //
-//	// Now use validated builders:
-//	trace, err := client.NewTraceStrict().
-//	    Name("my-trace").
-//	    Create(ctx).
-//	    Unwrap()
+//	// Strict validation now runs inside the standard builder's Create:
+//	trace, err := client.NewTrace().Name("my-trace").Create(ctx)
 //	if err != nil {
-//	    log.Printf("Validation failed: %v", err)
+//	    log.Printf("validation failed: %v", err)
 //	}
 func WithStrictValidationEnabled() ConfigOption {
 	return func(c *Config) {

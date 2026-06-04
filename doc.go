@@ -52,9 +52,8 @@
 //	    log.Printf("failed to end generation: %v", err)
 //	}
 //
-// Other surfaces (the Simple API methods such as [Client.Trace] and the
-// Validated* builders) remain supported but are documented as secondary; prefer
-// the symbols above.
+// Other surfaces (the Simple API methods such as [Client.Trace]) remain
+// supported but are documented as secondary; prefer the symbols above.
 //
 // # Quick Start
 //
