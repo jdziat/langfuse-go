@@ -7,8 +7,8 @@
 # call chains, missing context arguments, ...). It extracts every Go code block
 # from the documentation sources, assembles each into a compilable unit, and
 # runs `go build` against a throwaway module that points at the local copy of
-# this module via a `replace` directive. If a self-contained example fails to
-# compile the script exits non-zero and names the offending doc + block.
+# this module via a `replace` directive. If a snippet fails to compile the
+# script exits non-zero and names the offending doc + block.
 #
 # Sources scanned:
 #   - README.md
@@ -32,18 +32,40 @@
 #   ```
 #       A block that does NOT declare its own package is treated as an
 #       illustrative FRAGMENT — an excerpt that references variables (client,
-#       trace, ctx, ...) defined in the surrounding prose, or a cheat-sheet of
-#       call signatures. Fragments are wrapped in a minimal `func main` and a
-#       build is attempted on a best-effort basis: a fragment that compiles is
-#       reported as OK, but a fragment that does not (because it is, by design,
-#       incomplete) is reported as SKIPPED and does NOT fail the gate.
+#       trace, ctx, generation, span, ...) defined in the surrounding prose.
+#       The gate synthesises a compilable unit around it: a `package main`
+#       clause, a documented import block, and a wrapper function that supplies
+#       the commonly-referenced identifiers as pre-typed scaffold parameters
+#       (so the body can read/assign them) with the body nested in its own
+#       block (so `:=` redeclarations shadow the scaffolds cleanly). The
+#       fragment is then BUILT. A fragment that does not compile FAILS the gate
+#       just like a full program — this is the whole point: a renamed method or
+#       a dropped option in an excerpt is a real doc bug.
+#
+#       Scaffold identifiers available to every fragment (assign or shadow them
+#       freely):
+#         ctx        context.Context
+#         client     *langfuse.Client
+#         trace      *langfuse.TraceContext
+#         generation *langfuse.GenerationContext
+#         span       *langfuse.SpanContext
+#         meta       langfuse.Metadata
+#         usage      *langfuse.Usage
+#         publicKey  string
+#         secretKey  string
+#         err        error
 #
 #   ```go-nocompile
 #   ...
 #   ```
-#       Any block tagged `go-nocompile` (info string `go-nocompile`, or
-#       `go,nocompile`) is skipped entirely. Use this for blocks that are
-#       intentionally not valid Go.
+#       The explicit, intentional opt-out. Use it ONLY for blocks that are not
+#       meant to compile: cheat-sheets that list bare method/constant names
+#       (e.g. `meta.Set(key, value)` or `langfuse.RegionEU` with no surrounding
+#       statement), pseudo-code, or deliberately-broken "don't do this"
+#       examples. Tagged blocks are skipped and never fail the gate. Keep this
+#       set as small as possible: prefer turning an excerpt into something that
+#       compiles over hiding it behind `go-nocompile`. The info strings
+#       `go-nocompile` and `go,nocompile` are both recognised.
 #
 # Tooling: only `go` and standard POSIX/bash utilities (awk, mktemp, ...). No
 # network access beyond the local module is required.
@@ -84,8 +106,8 @@ SNIPPET_MODULE="langfuse-go-doc-snippets"
 # Resolve the dependency graph for the scratch module once.
 ( cd "$WORKDIR" && go mod tidy >/dev/null 2>&1 ) || true
 
-# extract_blocks <file> writes the code blocks found in <file> to numbered
-# files under $WORKDIR/blocks, one directory per (file, block). It records, per
+# extract_markdown_blocks <file> writes the code blocks found in <file> to
+# numbered files under $WORKDIR, one file per (source, block). It records, per
 # block, the source location, the 1-based block index, the fence kind
 # (go|go-nocompile) and whether the block looks self-contained (has a package
 # clause). Metadata lines are appended to $WORKDIR/index.
@@ -139,7 +161,6 @@ extract_docgo_blocks() {
 			close(path)
 			gsub(/^[[:space:]]+/, "", firstcode)
 			full = (firstcode ~ /^package /) ? 1 : 0
-			# doc.go comment blocks are always illustrative fragments.
 			print src "\t" n "\tgo\t" full "\t" path >> (workdir "/index")
 			buf = ""; firstcode = ""; incode = 0
 		}
@@ -152,12 +173,14 @@ extract_docgo_blocks() {
 			if (line !~ /^\/\//) { flush(); next }
 			# Strip the leading "//".
 			sub(/^\/\//, "", line)
-			# An indented comment line ("//\t..." or "//    ...") is code.
-			if (line ~ /^\t/ || line ~ /^    /) {
+			# In a gofmt-formatted doc comment, a code block is indented with a
+			# TAB ("//\t..."); space-indented runs ("//   - ..." / "//   1. ...")
+			# are markdown-style bullet/number lists, i.e. prose, NOT code. Only
+			# tab-indented lines start/continue a code block, so the bullet
+			# lists are left to the prose branch below.
+			if (line ~ /^\t/) {
 				if (firstcode == "") firstcode = line
-				# Normalise a single leading tab (godocs typical indent).
 				sub(/^\t/, "", line)
-				sub(/^    /, "", line)
 				buf = buf line "\n"
 				incode = 1
 				next
@@ -184,11 +207,57 @@ for g in "${DOC_GLOBS[@]}"; do
 	fi
 done
 
-# Compose a buildable Go file for a fragment block: add a package clause, an
-# import of the SDK (aliased "langfuse", matching the docs) plus a handful of
-# commonly used stdlib packages, and wrap the body in func main. Unused imports
-# are tolerated via a blank reference; the Go compiler still rejects genuinely
-# broken code (unknown methods, type errors, bad syntax).
+# wrap_fragment composes a buildable Go file for a fragment block. It adds a
+# package clause, the documented import block (the SDK aliased "langfuse",
+# matching the docs, plus the SDK's evaluation helper package and the handful
+# of stdlib packages the examples lean on), and a wrapper function that exposes
+# the common scaffold identifiers as PARAMETERS. Parameters are never flagged
+# "declared and not used", and nesting the fragment body in its own block lets
+# `ctx := ...` / `trace, err := ...` shadow the scaffolds without tripping the
+# "no new variables on left side of :=" rule. Unused imports are tolerated via
+# a blank reference block; the Go compiler still rejects genuinely broken code
+# (unknown methods, removed options, type errors, bad syntax) — which is the
+# point of the gate.
+#
+# Excerpts also routinely DECLARE a variable and leave it for "later" prose
+# (e.g. `client, err := langfuse.New(...)` with no following use). Go rejects
+# unused locals, so the harness scans the body for the names introduced by
+# top-level `:=` declarations and emits a trailing `_ = name` for each, marking
+# them used. Only declarations at the fragment's own base indent are consumed
+# (names bound inside a nested `if`/`for`/`{}` block stay in their own scope and
+# are referenced — or not — by the body itself).
+
+# fragment_decl_names <body_file> prints, one per line, the identifiers bound by
+# top-level short-variable declarations in the fragment body.
+fragment_decl_names() {
+	awk '
+		BEGIN { base = -1 }
+		{
+			line = $0
+			t = line; sub(/^[[:space:]]+/, "", t)
+			if (t == "" || t ~ /^\/\//) next
+			# Indent of this line (tabs count as one column, like spaces).
+			ind = 0
+			for (i = 1; i <= length(line); i++) {
+				c = substr(line, i, 1)
+				if (c == " " || c == "\t") ind++; else break
+			}
+			if (base < 0) base = ind
+			# Only top-level statements of the fragment declare reusable names.
+			if (ind != base) next
+			# Control-flow / block forms bind into their own scope; skip them.
+			if (t ~ /^(if|for|switch|select|go|defer|return|case|default|}|{)/) next
+			# Match a leading "a, b, c :=" short declaration.
+			if (match(t, /^[a-zA-Z_][a-zA-Z0-9_]*([[:space:]]*,[[:space:]]*[a-zA-Z_][a-zA-Z0-9_]*)*[[:space:]]*:=/)) {
+				lhs = substr(t, 1, RLENGTH)
+				sub(/:=$/, "", lhs); gsub(/[[:space:]]/, "", lhs)
+				n = split(lhs, arr, ",")
+				for (i = 1; i <= n; i++) if (arr[i] != "" && arr[i] != "_") print arr[i]
+			}
+		}
+	' "$1" | sort -u
+}
+
 wrap_fragment() {
 	local body_file="$1" out_file="$2"
 	{
@@ -196,6 +265,7 @@ wrap_fragment() {
 		echo ""
 		echo "import ("
 		echo "	\"context\""
+		echo "	\"errors\""
 		echo "	\"fmt\""
 		echo "	\"log\""
 		echo "	\"net/http\""
@@ -210,6 +280,7 @@ wrap_fragment() {
 		echo "// snippet body below is what is actually being type-checked."
 		echo "var ("
 		echo "	_ = context.Background"
+		echo "	_ = errors.Is"
 		echo "	_ = fmt.Sprint"
 		echo "	_ = log.Print"
 		echo "	_ = http.DefaultClient"
@@ -219,8 +290,45 @@ wrap_fragment() {
 		echo "	_ = evaluation.NewQATrace"
 		echo ")"
 		echo ""
-		echo "func main() {"
+		echo "func main() {}"
+		echo ""
+		echo "// docSnippet hosts a single documentation fragment. The common"
+		echo "// identifiers referenced by excerpts are supplied as scaffold"
+		echo "// parameters; the fragment body runs in a nested block so its own"
+		echo "// short variable declarations shadow the scaffolds cleanly."
+		echo "func docSnippet("
+		echo "	ctx context.Context,"
+		echo "	client *langfuse.Client,"
+		echo "	trace *langfuse.TraceContext,"
+		echo "	generation *langfuse.GenerationContext,"
+		echo "	span *langfuse.SpanContext,"
+		echo "	meta langfuse.Metadata,"
+		echo "	usage *langfuse.Usage,"
+		echo "	publicKey string,"
+		echo "	secretKey string,"
+		echo "	err error,"
+		echo ") {"
+		echo "	_ = ctx"
+		echo "	_ = client"
+		echo "	_ = trace"
+		echo "	_ = generation"
+		echo "	_ = span"
+		echo "	_ = meta"
+		echo "	_ = usage"
+		echo "	_ = publicKey"
+		echo "	_ = secretKey"
+		echo "	_ = err"
+		echo "	{"
 		cat "$body_file"
+		# Mark every top-level-declared name as used so an excerpt that only
+		# binds a variable (leaving its use to the surrounding prose) still
+		# compiles. A genuinely broken right-hand side still fails to type-check.
+		local name
+		fragment_decl_names "$body_file" | while IFS= read -r name; do
+			[ -n "$name" ] || continue
+			echo "		_ = $name"
+		done
+		echo "	}"
 		echo "}"
 	} >"$out_file"
 }
@@ -253,34 +361,39 @@ while IFS=$'\t' read -r src idx kind full path; do
 			echo "OK   (program):  $label"
 		else
 			failures=$((failures + 1))
-			fail_list="$fail_list\n  - $label"
+			fail_list="$fail_list\n  - $label (program)"
 			echo "FAIL (program):  $label"
 			sed 's/^/      /' "$blockdir/build.log"
 		fi
 	else
-		# Illustrative fragment: best-effort wrap + build. Never a hard failure.
+		# Illustrative fragment: wrap in the scaffold harness + build. A
+		# fragment that does not compile is a hard failure (a real doc bug);
+		# intentionally-partial cheat-sheets must opt out via `go-nocompile`.
 		wrap_fragment "$path" "$blockdir/main.go"
 		if ( cd "$blockdir" && GOFLAGS=-mod=mod go build ./... ) >"$blockdir/build.log" 2>&1; then
 			compiled=$((compiled + 1))
 			echo "OK   (fragment): $label"
 		else
-			skipped=$((skipped + 1))
-			echo "SKIP (fragment): $label (does not compile standalone; treated as a partial excerpt)"
+			failures=$((failures + 1))
+			fail_list="$fail_list\n  - $label (fragment)"
+			echo "FAIL (fragment): $label"
+			sed 's/^/      /' "$blockdir/build.log"
 		fi
 	fi
 done <"$WORKDIR/index"
 
 echo ""
-echo "doc snippet build gate: $total block(s) — $compiled compiled, $skipped skipped, $failures failed"
+echo "doc snippet build gate: $total block(s) — $compiled compiled, $skipped skipped (go-nocompile), $failures failed"
 
 if [ "$failures" -ne 0 ]; then
 	echo ""
-	echo "The following self-contained doc examples failed to compile:"
+	echo "The following doc snippets failed to compile:"
 	# shellcheck disable=SC2059
 	printf "$fail_list\n"
 	echo ""
-	echo "Fix the snippet, or tag the fence as \`\`\`go-nocompile if it is"
-	echo "intentionally not compilable."
+	echo "Fix the snippet so it compiles against the current public API. If the"
+	echo "block is an intentionally-partial cheat-sheet or pseudo-code (e.g. a"
+	echo "list of bare method/constant names), tag its fence as \`\`\`go-nocompile."
 	exit 1
 fi
 

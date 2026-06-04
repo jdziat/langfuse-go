@@ -289,7 +289,7 @@ langfuse-go/
 
 ### Client Methods
 
-```go
+```go-nocompile
 client.NewTrace()              // Create a new trace
 client.Traces()                // Access traces client
 client.Observations()          // Access observations client
@@ -313,7 +313,7 @@ client.ModelsWithOptions(...)
 
 ### Configuration Constants
 
-```go
+```go-nocompile
 // Regions
 langfuse.RegionEU              // EU region (default)
 langfuse.RegionUS              // US region
@@ -353,12 +353,12 @@ if err != nil {
 
     // Check for validation errors
     if valErr, ok := langfuse.AsValidationError(err); ok {
-        log.Printf("Validation failed: %v", valErr.Fields)
+        log.Printf("Validation failed for field %q: %s", valErr.Field, valErr.Message)
     }
 
     // Check for async/batch errors
     if ingErr, ok := langfuse.AsIngestionError(err); ok {
-        log.Printf("Ingestion failed: %s", ingErr.Reason)
+        log.Printf("Ingestion failed for %s: %s", ingErr.ID, ingErr.Message)
     }
 }
 ```
@@ -417,7 +417,7 @@ if count, ok := meta.GetInt("count"); ok {
 // Check existence
 if meta.Has("version") {
     version, _ := meta.GetString("version")
-    // Use version
+    log.Printf("Version: %s", version)
 }
 ```
 
@@ -444,7 +444,7 @@ if meta.IsEmpty() {
 
 ### Available Methods
 
-```go
+```go-nocompile
 meta.Set(key, value)          // Set a value
 meta.Get(key)                 // Get any value
 meta.GetString(key)           // Get string with type check
@@ -504,7 +504,7 @@ result, err := models.List(ctx, nil)
 
 All major sub-clients support the WithOptions pattern:
 
-```go
+```go-nocompile
 client.PromptsWithOptions(opts...)   // Configure prompts client
 client.TracesWithOptions(opts...)    // Configure traces client
 client.DatasetsWithOptions(opts...)  // Configure datasets client
@@ -529,8 +529,8 @@ client.ModelsWithOptions(opts...)    // Configure models client
 
 3. **Batch configuration**: Tune batch size and flush interval for your workload
    ```go
-   langfuse.WithBatchSize(100),
-   langfuse.WithFlushInterval(10*time.Second),
+   langfuse.WithBatchSize(100)
+   langfuse.WithFlushInterval(10 * time.Second)
    ```
 
 4. **Error handling**: Always check errors from Create(), Apply(), and End() methods
