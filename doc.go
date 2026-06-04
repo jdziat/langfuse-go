@@ -3,9 +3,20 @@
 // Langfuse enables you to trace, monitor, and analyze LLM applications. This SDK
 // provides a fluent builder pattern for creating traces, spans, generations, and events.
 //
-// # Quick Start
+// # Start Here
 //
-// Create a client and start tracing:
+// The SDK offers several ways to create observations, but new code should use
+// the canonical, context-threaded fluent builders. These five symbols cover the
+// common path:
+//
+//   - [New] — construct a [Client] from your public and secret keys.
+//   - [Client.NewTrace] — start a trace; chain setters then Create(ctx).
+//   - [TraceContext.NewSpan] — add a span (a unit of work) to a trace.
+//   - [TraceContext.NewGeneration] — record an LLM generation on a trace.
+//   - [GenerationContext.EndWithUsage] — finish a generation with output and
+//     token usage.
+//
+// A complete, canonical example:
 //
 //	client, err := langfuse.New(
 //	    os.Getenv("LANGFUSE_PUBLIC_KEY"),
@@ -16,25 +27,53 @@
 //	}
 //	defer client.Shutdown(context.Background())
 //
-//	// Create a trace
+//	ctx := context.Background()
+//
 //	trace, err := client.NewTrace().
 //	    Name("my-llm-call").
 //	    UserID("user-123").
-//	    Create()
+//	    Create(ctx)
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
 //
-//	// Record an LLM generation
-//	gen, err := trace.Generation().
+//	gen, err := trace.NewGeneration().
 //	    Name("openai-completion").
 //	    Model("gpt-4").
 //	    Input("What is Go?").
-//	    Create()
+//	    Create(ctx)
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
 //
 //	// ... make your LLM call ...
 //
-//	gen.End().
-//	    Output("Go is a programming language...").
-//	    Usage(1500, 100).
-//	    Apply()
+//	if err := gen.EndWithUsage(ctx, "Go is a programming language...", 1500, 100); err != nil {
+//	    log.Printf("failed to end generation: %v", err)
+//	}
+//
+// # Canonical API vs. Convenience Wrappers
+//
+// There is one blessed way to instrument code: the fluent, context-threaded
+// builders (client.NewTrace()...Create(ctx), trace.NewSpan()...Create(ctx),
+// trace.NewGeneration()...Create(ctx), and so on). New code should use them.
+//
+// Everything else in this package is a convenience layer that sits on top of
+// those builders and exists only to save a few keystrokes. None of it adds
+// behavior the builders lack:
+//
+//   - The Simple API — [Client.Trace], [TraceContext.Span],
+//     [TraceContext.Generation], [TraceContext.Event], the [TraceContext.Score]
+//     family, and their counterparts on [SpanContext] and [GenerationContext] —
+//     takes a name plus variadic WithXxx options and forwards them to the
+//     matching builder.
+//   - The tracing helpers — [TraceGeneration], [TraceSpan], [TraceFunc], and
+//     [WithGeneration] — wrap a builder call around a function you supply to
+//     handle timing and error recording for you.
+//
+// These wrappers are fully supported and behave identically to the builder
+// calls they delegate to, but they are strictly secondary. When in doubt, reach
+// for the fluent builders.
 //
 // # Configuration
 //
@@ -46,6 +85,17 @@
 //	    langfuse.WithFlushInterval(5 * time.Second),
 //	    langfuse.WithDebug(true),
 //	)
+//
+// # Accessing Configuration
+//
+// To read back the configuration after construction, use [Client.Config],
+// which returns the full root *[Config] (with defaults applied), including
+// root-only fields such as EvaluationConfig and StrictValidation:
+//
+//	cfg := client.Config()
+//	if cfg.EvaluationConfig != nil {
+//	    // root-only fields are available via Config
+//	}
 //
 // # Thread Safety
 //
@@ -101,13 +151,13 @@
 //
 // # Queue Behavior
 //
-// The internal queue has a fixed capacity (configurable via [WithQueueSize]).
+// The internal queue has a fixed capacity (configurable via [WithBatchQueueSize]).
 // When the queue is full, new events may be dropped. Monitor for dropped events
 // by checking the error returned from trace/span/generation creation methods.
 //
 // For high-throughput applications:
 //
-//   - Increase queue size with [WithQueueSize]
+//   - Increase queue size with [WithBatchQueueSize]
 //   - Increase batch size with [WithBatchSize]
 //   - Consider calling [Client.Flush] at natural breakpoints (e.g., request completion)
 //
@@ -121,9 +171,6 @@
 //   - [github.com/jdziat/langfuse-go/langfusetest]: Test utilities including mock
 //     servers and test clients for unit testing code that uses Langfuse.
 //
-//   - [github.com/jdziat/langfuse-go/otel]: OpenTelemetry bridge for integrating
-//     Langfuse with existing OpenTelemetry instrumentation.
-//
 // # Examples
 //
 // See the examples directory for complete working examples:
@@ -132,6 +179,15 @@
 //   - examples/evaluation: RAG and Q&A evaluation workflows
 package langfuse
 
+import (
+	"github.com/jdziat/langfuse-go/internal/version"
+)
+
 // Version is the current SDK version.
 // This is used in User-Agent headers and for debugging.
-const Version = "1.0.0"
+//
+// The value is sourced from the single source of truth in internal/version
+// (embedded from internal/version/version.txt at build time) so that the
+// version is defined in exactly one place and stays in sync across the root
+// package, pkg/client, and the root VERSION mirror.
+var Version = version.Version

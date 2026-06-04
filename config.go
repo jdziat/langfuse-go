@@ -277,9 +277,9 @@ type Config struct {
 	// goroutine creation under sustained high load. Default is 10.
 	MaxBackgroundSenders int
 
-	// StrictValidation enables strict validation mode with validated builders.
-	// When enabled, NewTraceStrict(), NewSpanStrict(), etc. methods become available.
-	// These return BuildResult types that force explicit error handling.
+	// StrictValidation enables strict validation mode. When enabled, the
+	// standard builders run additional field-level validation in Create and
+	// return the combined error instead of silently accepting invalid input.
 	StrictValidation *StrictValidationConfig
 
 	// EnableMetricsRecorder enables the internal metrics recorder.

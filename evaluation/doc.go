@@ -14,10 +14,10 @@
 //	trace, _ := evaluation.NewRAGTrace(client, "document-qa").
 //	    Query("What are Go's concurrency features?").
 //	    Context("Go has goroutines...", "Channels enable...").
-//	    Create()
+//	    Create(ctx)
 //
 //	// Update with output
-//	trace.UpdateOutput("Go provides goroutines and channels...", "docs.md")
+//	trace.UpdateOutput(ctx, "Go provides goroutines and channels...", "docs.md")
 //
 //	// Validate before running evaluators
 //	if err := trace.ValidateForEvaluation(); err != nil {

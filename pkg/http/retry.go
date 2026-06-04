@@ -177,8 +177,10 @@ func (e *ExponentialBackoff) ShouldRetry(attempt int, err error) bool {
 		return false
 	}
 
-	// Check if the error implements RetryableError interface
-	if retryableErr, ok := err.(RetryableError); ok {
+	// Check if the error implements RetryableError interface.
+	// Use errors.As so wrapped errors (fmt.Errorf("...: %w", err)) are detected.
+	var retryableErr RetryableError
+	if errors.As(err, &retryableErr) {
 		return retryableErr.IsRetryable()
 	}
 
@@ -195,8 +197,10 @@ func (e *ExponentialBackoff) RetryDelay(attempt int) time.Duration {
 // If the error implements RetryAfterError with a SuggestedRetryAfter value from the server,
 // that value is used (capped at MaxDelay).
 func (e *ExponentialBackoff) RetryDelayWithError(attempt int, err error) time.Duration {
-	// Check if error has a Retry-After hint from the server
-	if retryAfterErr, ok := err.(RetryAfterError); ok {
+	// Check if error has a Retry-After hint from the server.
+	// Use errors.As so wrapped errors (fmt.Errorf("...: %w", err)) are detected.
+	var retryAfterErr RetryAfterError
+	if errors.As(err, &retryAfterErr) {
 		retryAfter := retryAfterErr.SuggestedRetryAfter()
 		if retryAfter > 0 {
 			maxDelay := e.MaxDelay
@@ -233,14 +237,25 @@ func (e *ExponentialBackoff) calculateDelay(attempt int) time.Duration {
 	}
 
 	delay := float64(initialDelay) * math.Pow(multiplier, float64(attempt))
+
+	if e.Jitter {
+		// Add jitter: delay * random(0.5, 1.5) to prevent thundering herd.
+		jitterFactor := 0.5 + rand.Float64()
+		delay *= jitterFactor
+	}
+
+	// Cap at MaxDelay AFTER jitter so MaxDelay is a true upper bound. Capping
+	// before jitter would let the random factor push the effective delay up to
+	// ~1.5x MaxDelay.
 	if delay > float64(maxDelay) {
 		delay = float64(maxDelay)
 	}
 
-	if e.Jitter {
-		// Add jitter: delay * random(0.5, 1.5)
-		jitterFactor := 0.5 + rand.Float64()
-		delay *= jitterFactor
+	// Guard against a zero/negative delay from extreme inputs (e.g. a tiny
+	// InitialDelay combined with the low end of the jitter range). A retry
+	// should always wait a positive amount of time.
+	if delay < 1 {
+		delay = 1
 	}
 
 	return time.Duration(delay)
@@ -282,8 +297,10 @@ func (f *FixedDelay) ShouldRetry(attempt int, err error) bool {
 		return false
 	}
 
-	// Check if the error implements RetryableError interface
-	if retryableErr, ok := err.(RetryableError); ok {
+	// Check if the error implements RetryableError interface.
+	// Use errors.As so wrapped errors (fmt.Errorf("...: %w", err)) are detected.
+	var retryableErr RetryableError
+	if errors.As(err, &retryableErr) {
 		return retryableErr.IsRetryable()
 	}
 
@@ -327,8 +344,10 @@ func (l *LinearBackoff) ShouldRetry(attempt int, err error) bool {
 		return false
 	}
 
-	// Check if the error implements RetryableError interface
-	if retryableErr, ok := err.(RetryableError); ok {
+	// Check if the error implements RetryableError interface.
+	// Use errors.As so wrapped errors (fmt.Errorf("...: %w", err)) are detected.
+	var retryableErr RetryableError
+	if errors.As(err, &retryableErr) {
 		return retryableErr.IsRetryable()
 	}
 

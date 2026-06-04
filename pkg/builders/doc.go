@@ -41,7 +41,7 @@
 //	    Build()
 //
 //	// Validate input
-//	if err := builders.ValidateID("traceId", id); err != nil {
-//	    return err
+//	if err := builders.ValidateID("traceId", "abc-123"); err != nil {
+//	    log.Printf("invalid id: %v", err)
 //	}
 package builders

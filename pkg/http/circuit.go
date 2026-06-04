@@ -56,11 +56,18 @@ type CircuitBreakerConfig struct {
 	HalfOpenMaxRequests int
 
 	// OnStateChange is called when the circuit state changes.
+	// It is invoked asynchronously (off the breaker lock) and is recovered:
+	// a panic in the callback is contained and reported via Logger rather than
+	// crashing the process.
 	OnStateChange func(from, to CircuitState)
 
 	// IsFailure determines if an error should count as a failure.
 	// If nil, all non-nil errors are considered failures.
 	IsFailure func(err error) bool
+
+	// Logger, if set, receives diagnostic messages such as a recovered panic
+	// from the OnStateChange callback. If nil, such events are silently dropped.
+	Logger Logger
 }
 
 // DefaultCircuitBreakerConfig returns a CircuitBreakerConfig with sensible defaults.
@@ -120,6 +127,12 @@ func NewCircuitBreaker(config CircuitBreakerConfig) *CircuitBreaker {
 	if config.HalfOpenMaxRequests <= 0 {
 		config.HalfOpenMaxRequests = 1
 	}
+	// Recovery sanity: HalfOpenMaxRequests bounds the number of probes IN FLIGHT,
+	// not the total number of probes admitted while half-open. Record() releases a
+	// probe's slot when it completes (see Record), so even HalfOpenMaxRequests == 1
+	// admits successive probes until SuccessThreshold successes close the circuit.
+	// Recovery is therefore always possible for any positive configuration; no
+	// further clamping is required.
 
 	return &CircuitBreaker{
 		config: config,
@@ -173,14 +186,16 @@ func (cb *CircuitBreaker) Allow() bool {
 		return false
 
 	case CircuitHalfOpen:
-		// Transition from open to half-open if needed
+		// Transition from open to half-open if the timeout has elapsed.
+		// currentState() reports HalfOpen while cb.state is still Open, so this
+		// branch performs the real state change exactly once.
 		if cb.state == CircuitOpen {
 			cb.setState(CircuitHalfOpen)
-			cb.halfOpenRequests = 0
-			cb.successes = 0
 		}
 
-		// Allow limited requests in half-open state
+		// halfOpenRequests tracks probes currently IN FLIGHT. A probe is admitted
+		// while fewer than HalfOpenMaxRequests are outstanding; Record() decrements
+		// the counter when a probe completes, freeing the slot for the next probe.
 		if cb.halfOpenRequests < cb.config.HalfOpenMaxRequests {
 			cb.halfOpenRequests++
 			return true
@@ -219,15 +234,20 @@ func (cb *CircuitBreaker) Record(err error) {
 		}
 
 	case CircuitHalfOpen:
+		// A half-open probe has completed; release its in-flight slot so the
+		// next Allow() can admit another probe. setState resets the counter on
+		// transition, so only decrement when staying in half-open.
 		if isFailure {
-			// Failed in half-open, go back to open
+			// Failed in half-open, go back to open.
 			cb.lastFailure = time.Now()
 			cb.setState(CircuitOpen)
 		} else {
 			cb.successes++
 			if cb.successes >= cb.config.SuccessThreshold {
-				// Enough successes, close the circuit
+				// Enough successes, close the circuit.
 				cb.setState(CircuitClosed)
+			} else if cb.halfOpenRequests > 0 {
+				cb.halfOpenRequests--
 			}
 		}
 	}
@@ -282,9 +302,29 @@ func (cb *CircuitBreaker) setState(newState CircuitState) {
 	}
 
 	if cb.config.OnStateChange != nil {
-		// Call callback without lock to prevent deadlocks
-		go cb.config.OnStateChange(oldState, newState)
+		// Call the callback without holding the lock to prevent deadlocks, and
+		// recover from any panic so a misbehaving user callback cannot crash the
+		// process. The transition itself has already been applied above under the
+		// lock, so correctness does not depend on the callback completing.
+		cb.dispatchStateChange(oldState, newState)
 	}
+}
+
+// dispatchStateChange invokes the OnStateChange callback in a detached,
+// panic-safe goroutine. It must be called with the callback known to be
+// non-nil. The callback runs off the breaker lock; a panic is recovered and
+// routed to the configured Logger (if any) instead of crashing the process.
+func (cb *CircuitBreaker) dispatchStateChange(from, to CircuitState) {
+	callback := cb.config.OnStateChange
+	logger := cb.config.Logger
+	go func() {
+		defer func() {
+			if r := recover(); r != nil && logger != nil {
+				logger.Printf("langfuse: circuit breaker OnStateChange callback panicked (%s -> %s): %v", from, to, r)
+			}
+		}()
+		callback(from, to)
+	}()
 }
 
 // CircuitBreakerOption configures a circuit breaker.

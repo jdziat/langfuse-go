@@ -20,9 +20,11 @@
 // # Error Handling
 //
 // All SDK errors implement the LangfuseError interface, which provides
-// consistent error information:
+// consistent error information. The package is conventionally imported under
+// the alias "pkgerrors" so it does not shadow the standard library "errors"
+// package (imported here as "stdErrors"):
 //
-//	var langfuseErr errors.LangfuseError
+//	var langfuseErr pkgerrors.LangfuseError
 //	if stdErrors.As(err, &langfuseErr) {
 //	    if langfuseErr.IsRetryable() {
 //	        // Retry the operation
@@ -32,12 +34,12 @@
 //
 // Helper functions are provided for common error operations:
 //
-//	if apiErr, ok := errors.AsAPIError(err); ok {
+//	if apiErr, ok := pkgerrors.AsAPIError(err); ok {
 //	    fmt.Printf("API error %d: %s", apiErr.StatusCode, apiErr.Message)
 //	}
 //
-//	if errors.IsRetryable(err) {
-//	    time.Sleep(errors.RetryAfter(err))
+//	if pkgerrors.IsRetryable(err) {
+//	    time.Sleep(pkgerrors.RetryAfter(err))
 //	    // Retry the operation
 //	}
 //
@@ -49,9 +51,9 @@
 //   - ErrClientClosed: Operations on closed client
 //   - ErrNotFound, ErrUnauthorized, ErrRateLimited: API errors
 //
-// Use errors.Is() for sentinel error comparison:
+// Use the standard library errors.Is() for sentinel error comparison:
 //
-//	if stdErrors.Is(err, errors.ErrRateLimited) {
+//	if stdErrors.Is(err, pkgerrors.ErrRateLimited) {
 //	    // Handle rate limiting
 //	}
 package errors

@@ -22,17 +22,67 @@ func TestNewClient(t *testing.T) {
 	}
 	defer client.Shutdown(context.Background())
 
-	if client.RootConfig().PublicKey != "pk-lf-test-key" {
-		t.Errorf("PublicKey = %v, want pk-lf-test-key", client.RootConfig().PublicKey)
+	if client.Config().PublicKey != "pk-lf-test-key" {
+		t.Errorf("PublicKey = %v, want pk-lf-test-key", client.Config().PublicKey)
 	}
-	if client.RootConfig().SecretKey != "sk-lf-test-key" {
-		t.Errorf("SecretKey = %v, want sk-lf-test-key", client.RootConfig().SecretKey)
+	if client.Config().SecretKey != "sk-lf-test-key" {
+		t.Errorf("SecretKey = %v, want sk-lf-test-key", client.Config().SecretKey)
 	}
-	if client.RootConfig().Region != RegionUS {
-		t.Errorf("Region = %v, want %v", client.RootConfig().Region, RegionUS)
+	if client.Config().Region != RegionUS {
+		t.Errorf("Region = %v, want %v", client.Config().Region, RegionUS)
 	}
-	if client.RootConfig().BatchSize != 50 {
-		t.Errorf("BatchSize = %v, want 50", client.RootConfig().BatchSize)
+	if client.Config().BatchSize != 50 {
+		t.Errorf("BatchSize = %v, want 50", client.Config().BatchSize)
+	}
+}
+
+// TestConfigPreservesRootOnlyFields verifies that Config returns the full root
+// *Config, including root-only fields (such as EvaluationConfig) that live only
+// on the root configuration and not on the internal pkgclient.Config.
+func TestConfigPreservesRootOnlyFields(t *testing.T) {
+	evalCfg := &EvaluationConfig{
+		Mode:            EvaluationModeAuto,
+		DefaultWorkflow: WorkflowRAG,
+		IncludeMetadata: true,
+		IncludeTags:     true,
+	}
+
+	client, err := New(
+		"pk-lf-test-key",
+		"sk-lf-test-key",
+		WithRegion(RegionUS),
+		WithEvaluationConfig(evalCfg),
+	)
+	if err != nil {
+		t.Fatalf("New failed: %v", err)
+	}
+	defer client.Shutdown(context.Background())
+
+	got := client.Config()
+	if got == nil {
+		t.Fatal("Config() returned nil")
+	}
+
+	// Root-only field must round-trip through Config.
+	if got.EvaluationConfig == nil {
+		t.Fatal("Config().EvaluationConfig = nil, want non-nil (root-only field lost)")
+	}
+	if got.EvaluationConfig.Mode != EvaluationModeAuto {
+		t.Errorf("EvaluationConfig.Mode = %v, want %v", got.EvaluationConfig.Mode, EvaluationModeAuto)
+	}
+	if got.EvaluationConfig.DefaultWorkflow != WorkflowRAG {
+		t.Errorf("EvaluationConfig.DefaultWorkflow = %v, want %v", got.EvaluationConfig.DefaultWorkflow, WorkflowRAG)
+	}
+	if !got.EvaluationConfig.IncludeMetadata {
+		t.Error("EvaluationConfig.IncludeMetadata = false, want true")
+	}
+
+	// A couple of common fields should also match what was passed.
+	if got.PublicKey != "pk-lf-test-key" {
+		t.Errorf("PublicKey = %v, want pk-lf-test-key", got.PublicKey)
+	}
+	if got.Region != RegionUS {
+		t.Errorf("Region = %v, want %v", got.Region, RegionUS)
 	}
 }
 

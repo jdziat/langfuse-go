@@ -142,13 +142,13 @@ func ExampleGenerationContext_Score() {
 	gen, _ := trace.NewGeneration().Name("completion").Create(context.Background())
 
 	// Add a numeric score
-	_ = gen.ScoreNumeric(context.Background(), "accuracy", 0.95)
+	_ = gen.Score(context.Background(), "accuracy", 0.95)
 
 	// Add a categorical score
-	_ = gen.ScoreCategorical(context.Background(), "sentiment", "positive")
+	_ = gen.ScoreCategory(context.Background(), "sentiment", "positive")
 
 	// Add a boolean score
-	_ = gen.ScoreBoolean(context.Background(), "factual", true)
+	_ = gen.ScoreBool(context.Background(), "factual", true)
 
 	// Or use the full builder for more control
 	_ = gen.NewScore().

@@ -11,16 +11,16 @@
 // Example usage:
 //
 //	// Use default generator (fallback mode)
-//	id, err := id.GenerateID()
+//	defaultID, err := id.GenerateID()
 //
 //	// Create strict mode generator
 //	gen := id.NewIDGenerator(&id.IDGeneratorConfig{
 //	    Mode: id.IDModeStrict,
 //	})
-//	id, err := gen.Generate()
+//	strictID, err := gen.Generate()
 //
 //	// Check if an ID was generated using fallback
-//	if id.IsFallbackID(someID) {
-//	    log.Warn("ID was generated using fallback method")
+//	if id.IsFallbackID(defaultID) {
+//	    log.Println("ID was generated using fallback method")
 //	}
 package id

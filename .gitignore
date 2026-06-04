@@ -33,9 +33,20 @@ coverage.out
 # Environment
 .env
 .env.local
-evaluationevaluation
 dist/
+
+# Example binaries built at the repo root (basenames of ./examples/* dirs).
+# Root-anchored so they do not match the examples/ source files. The
+# "evaluation" example basename is intentionally omitted because it would
+# collide with the tracked root evaluation/ package directory.
+/advanced
+/basic
+/llm_as_judge
+/middleware
+/testing
+/v1_api
 
 # Hugo build output
 public/
 resources/_gen/
+.hugo_build.lock

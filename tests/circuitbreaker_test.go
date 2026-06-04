@@ -1,7 +1,10 @@
 package langfuse_test
 
 import (
+	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -784,7 +787,8 @@ func TestCircuitBreaker_RapidStateChanges(t *testing.T) {
 }
 
 // TestCircuitBreaker_HalfOpenRequestTracking tests that half-open request
-// tracking accurately limits the total number of requests allowed.
+// tracking limits the number of probes IN FLIGHT at once, and that completing a
+// probe via Record() frees its slot for the next probe.
 func TestCircuitBreaker_HalfOpenRequestTracking(t *testing.T) {
 	cb := langfuse.NewCircuitBreaker(langfuse.CircuitBreakerConfig{
 		FailureThreshold:    1,
@@ -803,27 +807,28 @@ func TestCircuitBreaker_HalfOpenRequestTracking(t *testing.T) {
 		t.Fatalf("expected half-open state, got %s", cb.State())
 	}
 
-	// All 3 requests should be allowed (exhausts the half-open budget)
+	// All 3 probes can be in flight at once (exhausts the in-flight budget).
 	for i := 0; i < 3; i++ {
 		if !cb.Allow() {
 			t.Errorf("request %d should be allowed", i+1)
 		}
 	}
 
-	// 4th request should be blocked (budget exhausted)
+	// 4th request is blocked: 3 probes already in flight, none have completed.
 	if cb.Allow() {
-		t.Error("4th request should be blocked - half-open budget exhausted")
+		t.Error("4th request should be blocked - in-flight budget exhausted")
 	}
 
-	// Record success - this doesn't free up slots, it counts toward SuccessThreshold
+	// Completing a probe frees its in-flight slot (success counts toward
+	// SuccessThreshold but does not yet close the circuit at 1 of 3).
 	cb.Record(nil)
 
-	// Still blocked - recording success doesn't replenish the half-open budget
-	if cb.Allow() {
-		t.Error("request should still be blocked after single success")
+	// The freed slot lets the next probe through.
+	if !cb.Allow() {
+		t.Error("request should be allowed after a probe completes and frees a slot")
 	}
 
-	// Record 2 more successes to reach SuccessThreshold (3)
+	// Record 2 more successes to reach SuccessThreshold (3) and close the circuit.
 	cb.Record(nil)
 	cb.Record(nil)
 
@@ -835,6 +840,63 @@ func TestCircuitBreaker_HalfOpenRequestTracking(t *testing.T) {
 	// Requests should now be allowed (circuit is closed)
 	if !cb.Allow() {
 		t.Error("request should be allowed after circuit closes")
+	}
+}
+
+// TestCircuitBreaker_DefaultFailureClassification verifies the failure classifier
+// wired by the production client: non-retryable 4xx responses (e.g. 404) must NOT
+// trip the breaker, while retryable 5xx responses (e.g. 503) must. The breaker is
+// driven through the real client request path (Health -> circuit breaker Execute).
+func TestCircuitBreaker_DefaultFailureClassification(t *testing.T) {
+	tests := []struct {
+		name       string
+		statusCode int
+		wantOpen   bool
+	}{
+		{name: "non-retryable 404 does not open", statusCode: 404, wantOpen: false},
+		{name: "retryable 503 opens", statusCode: 503, wantOpen: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(tt.statusCode)
+			}))
+			defer server.Close()
+
+			// FailureThreshold 5 so exactly 5 classified failures open the breaker.
+			// No IsFailure is set, so the client's default classifier is used.
+			// NoRetry keeps each Health() call to a single request, regardless of
+			// the response being retryable.
+			client, err := langfuse.New(
+				"pk-lf-test-key",
+				"sk-lf-test-key",
+				langfuse.WithBaseURL(server.URL),
+				langfuse.WithRetryStrategy(&langfuse.NoRetry{}),
+				langfuse.WithCircuitBreaker(langfuse.CircuitBreakerConfig{
+					FailureThreshold: 5,
+					Timeout:          time.Hour, // stay open if it trips
+				}),
+			)
+			if err != nil {
+				t.Fatalf("New failed: %v", err)
+			}
+			defer client.Shutdown(context.Background())
+
+			// Drive 5 consecutive error responses through the breaker.
+			for i := 0; i < 5; i++ {
+				if _, err := client.Health(context.Background()); err == nil {
+					t.Fatalf("Health() #%d returned nil error for status %d", i+1, tt.statusCode)
+				}
+			}
+
+			state := client.CircuitBreakerState()
+			gotOpen := state == langfuse.CircuitOpen
+			if gotOpen != tt.wantOpen {
+				t.Errorf("after 5x %d: circuit state = %v (open=%v), want open=%v",
+					tt.statusCode, state, gotOpen, tt.wantOpen)
+			}
+		})
 	}
 }
 

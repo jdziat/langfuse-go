@@ -1,4 +1,4 @@
-package evaluation
+package evalstore
 
 import (
 	"encoding/json"
@@ -30,8 +30,13 @@ type EventPersistence struct {
 }
 
 // NewEventPersistence creates a new event persistence handler.
+//
+// Security note: persisted batches contain raw trace input/output bodies,
+// which may include PII or secrets, and are stored in cleartext (unencrypted)
+// JSON. The persistence directory is therefore created with mode 0700
+// (owner-only access) so that other local users cannot read the bodies.
 func NewEventPersistence(dir string) (*EventPersistence, error) {
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0700); err != nil {
 		return nil, fmt.Errorf("failed to create persistence directory: %w", err)
 	}
 
@@ -62,7 +67,9 @@ func (p *EventPersistence) Save(events []PersistedEvent) error {
 	filename := fmt.Sprintf("events_%d.json", time.Now().UnixNano())
 	path := filepath.Join(p.dir, filename)
 
-	if err := os.WriteFile(path, data, 0644); err != nil {
+	// Bodies may contain PII or secrets and are stored in cleartext, so the
+	// file is written with mode 0600 (owner read/write only).
+	if err := os.WriteFile(path, data, 0600); err != nil {
 		return fmt.Errorf("failed to write events file: %w", err)
 	}
 

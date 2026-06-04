@@ -3,394 +3,252 @@ title: Migration Guide
 weight: 6
 ---
 
-This guide helps you migrate to the latest version of the Langfuse Go SDK.
+This guide helps you adopt the canonical Langfuse Go SDK API. Earlier drafts and
+some third-party examples used a params-struct style (for example
+`client.Trace(TraceParams{...})`) that the SDK does not provide. The supported
+API is a context-threaded fluent builder, and this guide shows how to move to
+it.
 
 ## Overview
 
-The SDK has been refactored to provide a cleaner, more type-safe API. This guide covers:
+The canonical API has these properties:
 
-- Breaking changes
-- New patterns and best practices
-- Migration examples
-- Troubleshooting
+- A single import at the **module root** (no `/langfuse` subdirectory).
+- Positional `publicKey, secretKey` arguments to `New`, with behavior tuned by
+  `ConfigOption` functions.
+- Fluent builders that chain setters and finish with `Create(ctx)`,
+  `Apply(ctx)`, or one of the `End*` methods.
+- Every network-touching call takes a `context.Context`.
 
-## Breaking Changes
+## Import Path
 
-### 1. Type-Safe Constructors
+The package lives at the module root. Import it directly:
 
-**Old Pattern:**
-```go
-// Generic constructors with error strings
-generation := trace.AsGeneration(...)
-span := trace.AsSpan(...)
+```text
+import langfuse "github.com/jdziat/langfuse-go"
 ```
 
-**New Pattern:**
-```go
-// Type-specific constructors
-generation := trace.Generation(langfuse.GenerationParams{...})
-span := trace.Span(langfuse.SpanParams{...})
+There is no `github.com/jdziat/langfuse-go/langfuse` package. The optional
+evaluation helpers live in a subpackage:
+
+```text
+import "github.com/jdziat/langfuse-go/evaluation"
 ```
 
-**Why:** Type-safe constructors prevent errors at compile time and provide better IDE support.
+## Client Construction
 
-### 2. WithOptions Pattern Removed
+The keys are positional arguments, not options. There are no `WithPublicKey` or
+`WithSecretKey` functions.
 
-**Old Pattern:**
-```go
-// WithOptions parameter
-generation := trace.Generation(langfuse.GenerationParams{...}, langfuse.WithOptions(...))
-```
-
-**New Pattern:**
-```go
-// All configuration in params struct
-generation := trace.Generation(langfuse.GenerationParams{
-    Name: "openai-chat",
-    Model: "gpt-4",
-    Input: inputData,
-    // ... all other options
-})
-```
-
-**Why:** Simpler API with all configuration in one place.
-
-### 3. Context-Based Operations
-
-**Old Pattern:**
-```go
-// No context support
-client.Flush()
-client.Shutdown()
-```
-
-**New Pattern:**
-```go
-// Context for timeout and cancellation
-ctx := context.Background()
-client.Flush(ctx)
-client.Shutdown(ctx)
-```
-
-**Why:** Better control over timeouts and cancellation.
-
-## Migration Examples
-
-### Example 1: Basic Trace Creation
-
-**Before:**
-```go
-trace := client.Trace(langfuse.TraceParams{
-    Name: "chat-completion",
-})
-
-generation := trace.AsGeneration(langfuse.GenerationParams{
-    Name: "openai-chat",
-    Model: "gpt-4",
-})
-```
-
-**After:**
-```go
-trace := client.Trace(langfuse.TraceParams{
-    Name: "chat-completion",
-})
-
-generation := trace.Generation(langfuse.GenerationParams{
-    Name: "openai-chat",
-    Model: "gpt-4",
-})
-```
-
-### Example 2: Spans and Events
-
-**Before:**
-```go
-span := trace.AsSpan(langfuse.SpanParams{
-    Name: "retrieve-documents",
-})
-
-event := trace.AsEvent(langfuse.EventParams{
-    Name: "cache-hit",
-})
-```
-
-**After:**
-```go
-span := trace.Span(langfuse.SpanParams{
-    Name: "retrieve-documents",
-})
-
-event := trace.Event(langfuse.EventParams{
-    Name: "cache-hit",
-})
-```
-
-### Example 3: Nested Observations
-
-**Before:**
-```go
-span := trace.AsSpan(langfuse.SpanParams{Name: "parent"})
-childSpan := span.AsSpan(langfuse.SpanParams{Name: "child"})
-```
-
-**After:**
-```go
-span := trace.Span(langfuse.SpanParams{Name: "parent"})
-childSpan := span.Span(langfuse.SpanParams{Name: "child"})
-```
-
-### Example 4: Graceful Shutdown
-
-**Before:**
-```go
-defer client.Shutdown()
-```
-
-**After:**
-```go
-defer client.Shutdown(context.Background())
-
-// Or with timeout
-defer func() {
-    ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-    defer cancel()
-    client.Shutdown(ctx)
-}()
-```
-
-### Example 5: Flushing Events
-
-**Before:**
-```go
-client.Flush()
-```
-
-**After:**
-```go
-if err := client.Flush(context.Background()); err != nil {
-    log.Printf("Flush failed: %v", err)
-}
-
-// Or with timeout
-ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-defer cancel()
-
-if err := client.Flush(ctx); err != nil {
-    log.Printf("Flush failed: %v", err)
-}
-```
-
-## Step-by-Step Migration
-
-### Step 1: Update Imports
-
-Ensure you're importing the latest version:
-
-```go
-import "github.com/jdziat/langfuse-go/langfuse"
-```
-
-Update your `go.mod`:
-
-```bash
-go get -u github.com/jdziat/langfuse-go
-```
-
-### Step 2: Replace As* Methods
-
-Find and replace all `As*` method calls:
-
-```bash
-# Find usage
-grep -r "AsGeneration\|AsSpan\|AsEvent" .
-
-# Replace in your code
-AsGeneration → Generation
-AsSpan → Span
-AsEvent → Event
-```
-
-### Step 3: Add Context Support
-
-Add context to `Flush` and `Shutdown` calls:
-
-**Before:**
-```go
-defer client.Shutdown()
-client.Flush()
-```
-
-**After:**
-```go
-defer client.Shutdown(context.Background())
-
-if err := client.Flush(context.Background()); err != nil {
-    log.Printf("Flush error: %v", err)
-}
-```
-
-### Step 4: Remove WithOptions
-
-Remove any `WithOptions` usage and move options into params:
-
-**Before:**
-```go
-generation := trace.Generation(
-    langfuse.GenerationParams{Name: "test"},
-    langfuse.WithOptions(langfuse.Options{...}),
+**Incorrect:**
+```text
+client, err := langfuse.New(
+    langfuse.WithPublicKey("pk-lf-..."),
+    langfuse.WithSecretKey("sk-lf-..."),
 )
 ```
 
-**After:**
+**Correct:**
 ```go
-generation := trace.Generation(langfuse.GenerationParams{
-    Name: "test",
-    // All options here
-})
+client, err := langfuse.New("pk-lf-...", "sk-lf-...",
+    langfuse.WithRegion(langfuse.RegionUS),
+)
 ```
 
-### Step 5: Test Your Changes
+## Creating Traces
 
-Run your tests to verify the migration:
+There are no `TraceParams`, `GenerationParams`, `SpanParams`, `EventParams`, or
+`ScoreParams` types. Use the fluent builder and finish with `Create(ctx)`.
 
-```bash
-go test ./...
-```
-
-## Common Migration Issues
-
-### Issue 1: Compile Error - "As* method not found"
-
-**Error:**
-```
-trace.AsGeneration undefined (type *Trace has no field or method AsGeneration)
-```
-
-**Solution:**
-Replace with type-specific constructor:
-```go
-generation := trace.Generation(langfuse.GenerationParams{...})
-```
-
-### Issue 2: Context Required Error
-
-**Error:**
-```
-not enough arguments in call to client.Flush
-```
-
-**Solution:**
-Add context parameter:
-```go
-client.Flush(context.Background())
-```
-
-### Issue 3: WithOptions Not Found
-
-**Error:**
-```
-undefined: WithOptions
-```
-
-**Solution:**
-Move all options into the params struct:
-```go
-generation := trace.Generation(langfuse.GenerationParams{
-    Name: "test",
-    Model: "gpt-4",
-    // All configuration here
-})
-```
-
-## Migration Checklist
-
-Use this checklist to ensure complete migration:
-
-- [ ] Updated to latest SDK version
-- [ ] Replaced `AsGeneration` with `Generation`
-- [ ] Replaced `AsSpan` with `Span`
-- [ ] Replaced `AsEvent` with `Event`
-- [ ] Added context to `Flush()` calls
-- [ ] Added context to `Shutdown()` calls
-- [ ] Removed `WithOptions` usage
-- [ ] Moved options to params structs
-- [ ] Added error handling for `Flush()` and `Shutdown()`
-- [ ] Updated tests
-- [ ] Verified in development environment
-- [ ] Deployed to staging
-- [ ] Monitored for issues
-
-## Code Modernization
-
-Beyond breaking changes, consider these improvements:
-
-### Use Meaningful Names
-
-```go
-// Good
+**Incorrect:**
+```text
 trace := client.Trace(langfuse.TraceParams{
-    Name: "user-chat-completion",
+    Name:   "chat-completion",
     UserID: "user-123",
 })
-
-// Avoid
-trace := client.Trace(langfuse.TraceParams{
-    Name: "trace1",
-})
 ```
 
-### Add Rich Metadata
-
+**Correct:**
 ```go
-generation := trace.Generation(langfuse.GenerationParams{
-    Name: "openai-chat",
-    Model: "gpt-4",
-    Metadata: map[string]any{
-        "environment": "production",
-        "version": "1.2.3",
-        "feature_flags": map[string]bool{
-            "new_model": true,
-        },
-    },
-})
-```
+ctx := context.Background()
 
-### Proper Error Handling
-
-```go
-ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-defer cancel()
-
-if err := client.Flush(ctx); err != nil {
-    if errors.Is(err, context.DeadlineExceeded) {
-        log.Printf("Flush timeout: %v", err)
-    } else {
-        log.Printf("Flush failed: %v", err)
-    }
+trace, err := client.NewTrace().
+    Name("chat-completion").
+    UserID("user-123").
+    Create(ctx)
+if err != nil {
+    log.Fatal(err)
 }
 ```
 
-### Use Token Usage
-
-Always include usage information for generations:
+For one-line creation, `Client.Trace` takes a context, a name, and
+`TraceOption` functions:
 
 ```go
-generation.Update(langfuse.GenerationParams{
-    Output: responseData,
-    Usage: &langfuse.Usage{
-        PromptTokens:     100,
-        CompletionTokens: 50,
-        TotalTokens:      150,
-    },
+ctx := context.Background()
+
+trace, err := client.Trace(ctx, "chat-completion",
+    langfuse.WithUserID("user-123"),
+)
+if err != nil {
+    log.Fatal(err)
+}
+_ = trace
+```
+
+## Creating Generations
+
+Generations are created from a trace (or observation) with `NewGeneration()` and
+finished with `EndWithUsage` (or `End` / `EndWithOutput`).
+
+**Incorrect:**
+```text
+generation := trace.Generation(langfuse.GenerationParams{
+    Name:  "openai-chat",
+    Model: "gpt-4",
 })
+generation.Update(langfuse.GenerationParams{
+    Output: map[string]any{"response": "Hello!"},
+    Usage:  &langfuse.Usage{PromptTokens: 10, CompletionTokens: 5},
+})
+```
+
+**Correct:**
+```go
+ctx := context.Background()
+
+generation, err := trace.NewGeneration().
+    Name("openai-chat").
+    Model("gpt-4").
+    Create(ctx)
+if err != nil {
+    log.Fatal(err)
+}
+
+// EndWithUsage records the output plus input and output token counts.
+if err := generation.EndWithUsage(ctx, "Hello!", 10, 5); err != nil {
+    log.Printf("end failed: %v", err)
+}
+```
+
+Note that the `Usage` type uses `Input`, `Output`, and `Total` fields (not
+`PromptTokens`/`CompletionTokens`):
+
+```go
+usage := &langfuse.Usage{Input: 10, Output: 5, Total: 15}
+_ = usage
+```
+
+## Creating Spans and Events
+
+Spans use `NewSpan()` + `Create(ctx)` and finish with `End(ctx)` or
+`EndWithOutput(ctx, output)`. Events use `NewEvent()` + `Create(ctx)`.
+
+**Incorrect:**
+```text
+span := trace.Span(langfuse.SpanParams{Name: "retrieve-documents"})
+event := trace.Event(langfuse.EventParams{Name: "cache-hit"})
+```
+
+**Correct:**
+```go
+ctx := context.Background()
+
+span, err := trace.NewSpan().Name("retrieve-documents").Create(ctx)
+if err != nil {
+    log.Fatal(err)
+}
+if err := span.End(ctx); err != nil {
+    log.Printf("end failed: %v", err)
+}
+
+if err := trace.NewEvent().Name("cache-hit").Create(ctx); err != nil {
+    log.Printf("event failed: %v", err)
+}
+```
+
+Nested observations are created from their parent context:
+
+```go
+ctx := context.Background()
+
+parent, err := trace.NewSpan().Name("parent").Create(ctx)
+if err != nil {
+    log.Fatal(err)
+}
+
+child, err := parent.NewSpan().Name("child").Create(ctx)
+if err != nil {
+    log.Fatal(err)
+}
+
+_ = child.End(ctx)
+_ = parent.End(ctx)
+```
+
+## Adding Scores
+
+There is no `client.Evaluator()` and no `ScoreParams`. Score any observation with
+`NewScore()`:
+
+**Incorrect:**
+```text
+trace.Score(langfuse.ScoreParams{Name: "user-rating", Value: 5.0})
+```
+
+**Correct:**
+```go
+ctx := context.Background()
+
+if err := trace.NewScore().
+    Name("user-rating").
+    NumericValue(5.0).
+    Create(ctx); err != nil {
+    log.Printf("score failed: %v", err)
+}
+```
+
+## Updating Observations
+
+Updates use an update builder finished with `Apply(ctx)`.
+
+**Incorrect:**
+```text
+trace.Update(langfuse.TraceParams{Output: map[string]any{"result": "ok"}})
+```
+
+**Correct:**
+```go
+ctx := context.Background()
+
+if err := trace.Update().
+    Output(map[string]any{"result": "ok"}).
+    Apply(ctx); err != nil {
+    log.Printf("update failed: %v", err)
+}
+```
+
+## Flush and Shutdown
+
+Both `Flush` and `Shutdown` take a context and return an error:
+
+```go
+ctx := context.Background()
+
+if err := client.Flush(ctx); err != nil {
+    log.Printf("flush failed: %v", err)
+}
+
+if err := client.Shutdown(ctx); err != nil {
+    log.Printf("shutdown failed: %v", err)
+}
 ```
 
 ## Complete Before/After Example
 
-### Before (Old API)
+### Before (params-struct style — not supported)
 
-```go
+```text
 package main
 
 import (
@@ -401,20 +259,18 @@ import (
 
 func main() {
     client, err := langfuse.New(
-        langfuse.WithPublicKey("pk_lf_..."),
-        langfuse.WithSecretKey("sk_lf_..."),
+        langfuse.WithPublicKey("pk-lf-..."),
+        langfuse.WithSecretKey("sk-lf-..."),
     )
     if err != nil {
         log.Fatal(err)
     }
     defer client.Shutdown()
 
-    trace := client.Trace(langfuse.TraceParams{
-        Name: "chat-completion",
-    })
+    trace := client.Trace(langfuse.TraceParams{Name: "chat-completion"})
 
-    generation := trace.AsGeneration(langfuse.GenerationParams{
-        Name: "openai-chat",
+    generation := trace.Generation(langfuse.GenerationParams{
+        Name:  "openai-chat",
         Model: "gpt-4",
     })
 
@@ -426,7 +282,7 @@ func main() {
 }
 ```
 
-### After (New API)
+### After (canonical API)
 
 ```go
 package main
@@ -435,55 +291,63 @@ import (
     "context"
     "log"
 
-    "github.com/jdziat/langfuse-go/langfuse"
+    langfuse "github.com/jdziat/langfuse-go"
 )
 
 func main() {
-    client, err := langfuse.New(
-        langfuse.WithPublicKey("pk_lf_..."),
-        langfuse.WithSecretKey("sk_lf_..."),
-    )
+    ctx := context.Background()
+
+    client, err := langfuse.New("pk-lf-...", "sk-lf-...")
     if err != nil {
         log.Fatal(err)
     }
-    defer client.Shutdown(context.Background())
+    defer client.Shutdown(ctx)
 
-    trace := client.Trace(langfuse.TraceParams{
-        Name: "chat-completion",
-    })
+    trace, err := client.NewTrace().Name("chat-completion").Create(ctx)
+    if err != nil {
+        log.Fatal(err)
+    }
 
-    generation := trace.Generation(langfuse.GenerationParams{
-        Name: "openai-chat",
-        Model: "gpt-4",
-    })
+    generation, err := trace.NewGeneration().
+        Name("openai-chat").
+        Model("gpt-4").
+        Create(ctx)
+    if err != nil {
+        log.Fatal(err)
+    }
 
-    generation.Update(langfuse.GenerationParams{
-        Output: map[string]any{"response": "Hello!"},
-        Usage: &langfuse.Usage{
-            PromptTokens:     10,
-            CompletionTokens: 5,
-            TotalTokens:      15,
-        },
-    })
+    if err := generation.EndWithUsage(ctx, "Hello!", 10, 5); err != nil {
+        log.Printf("end failed: %v", err)
+    }
 
-    if err := client.Flush(context.Background()); err != nil {
+    if err := client.Flush(ctx); err != nil {
         log.Printf("Flush failed: %v", err)
     }
 }
 ```
+
+## Migration Checklist
+
+- [ ] Import from `github.com/jdziat/langfuse-go` (module root)
+- [ ] Pass `publicKey, secretKey` positionally to `New`
+- [ ] Replace `*Params` structs with fluent builders (`NewTrace`,
+      `NewGeneration`, `NewSpan`, `NewEvent`, `NewScore`)
+- [ ] Finish builders with `Create(ctx)` / `Apply(ctx)` / `End*`
+- [ ] Use `Usage{Input, Output, Total}` field names
+- [ ] Add `context.Context` to `Flush` and `Shutdown`
+- [ ] Check returned errors on every call
 
 ## Getting Help
 
 If you encounter issues during migration:
 
 1. **Check the documentation**: [Getting Started Guide](../getting-started/)
-2. **Review examples**: [API Reference](../api-reference/)
+2. **Review the reference**: [API Reference](../api-reference/)
 3. **Open an issue**: [GitHub Issues](https://github.com/jdziat/langfuse-go/issues)
-4. **Ask the community**: [Langfuse Discord](https://langfuse.com/discord)
 
 ## Next Steps
 
-- [Getting Started](../getting-started/) - Learn the new API
+- [Getting Started](../getting-started/) - Learn the canonical API
 - [Configuration](../configuration/) - Optimize your setup
 - [Tracing Guide](../tracing/) - Master tracing patterns
 - [API Reference](../api-reference/) - Complete type reference

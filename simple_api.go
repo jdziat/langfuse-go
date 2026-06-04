@@ -154,13 +154,13 @@ type spanConfig struct {
 // SpanOption configures a span creation.
 // This interface allows both function-based options and unified observation options.
 type SpanOption interface {
-	apply(*spanConfig)
+	applySpan(*spanConfig)
 }
 
 // spanOptionFunc allows using functions as SpanOptions.
 type spanOptionFunc func(*spanConfig)
 
-func (f spanOptionFunc) apply(c *spanConfig) { f(c) }
+func (f spanOptionFunc) applySpan(c *spanConfig) { f(c) }
 
 // WithSpanID sets a custom span ID.
 func WithSpanID(id string) SpanOption {
@@ -267,13 +267,13 @@ type generationConfig struct {
 // GenerationOption configures a generation creation.
 // This interface allows both function-based options and unified observation options.
 type GenerationOption interface {
-	apply2(*generationConfig)
+	applyGeneration(*generationConfig)
 }
 
 // generationOptionFunc allows using functions as GenerationOptions.
 type generationOptionFunc func(*generationConfig)
 
-func (f generationOptionFunc) apply2(c *generationConfig) { f(c) }
+func (f generationOptionFunc) applyGeneration(c *generationConfig) { f(c) }
 
 // WithGenerationID sets a custom generation ID.
 func WithGenerationID(id string) GenerationOption {
@@ -425,13 +425,13 @@ type eventConfig struct {
 // EventOption configures an event creation.
 // This interface allows both function-based options and unified observation options.
 type EventOption interface {
-	apply3(*eventConfig)
+	applyEvent(*eventConfig)
 }
 
 // eventOptionFunc allows using functions as EventOptions.
 type eventOptionFunc func(*eventConfig)
 
-func (f eventOptionFunc) apply3(c *eventConfig) { f(c) }
+func (f eventOptionFunc) applyEvent(c *eventConfig) { f(c) }
 
 // WithEventID sets a custom event ID.
 func WithEventID(id string) EventOption {
@@ -542,29 +542,19 @@ func WithConfigID(configID string) ScoreOption {
 }
 
 // ============================================================================
-// Simple API on Client
+// Shared apply helpers
+//
+// The Simple API resolves each WithXxx option into a *Config struct and then
+// applies it to the corresponding fluent builder. Every Span/Generation/Event/
+// Score entry point (on Client, TraceContext, SpanContext, and GenerationContext)
+// shares the same apply logic, so it lives in one place here. The per-context
+// methods are thin wrappers that pick the right builder constructor and delegate
+// to these helpers. This keeps the Simple API a strict convenience layer over the
+// canonical fluent builders with a single internal apply path.
 // ============================================================================
 
-// Trace creates a new trace with the given name.
-// This is the Simple API for creating traces.
-//
-// Example:
-//
-//	trace, err := client.Trace(ctx, "user-request",
-//	    langfuse.WithUserID("user-123"),
-//	    langfuse.WithTags("api", "v2"))
-//	if err != nil {
-//	    return err
-//	}
-//	defer client.Flush(ctx)
-func (c *Client) Trace(ctx context.Context, name string, opts ...TraceOption) (*TraceContext, error) {
-	cfg := &traceConfig{}
-	for _, opt := range opts {
-		opt(cfg)
-	}
-
-	builder := c.NewTrace().Name(name)
-
+// applyTraceConfig copies a resolved traceConfig onto a TraceBuilder.
+func applyTraceConfig(builder *TraceBuilder, cfg *traceConfig) {
 	if cfg.id != "" {
 		builder.ID(cfg.id)
 	}
@@ -598,33 +588,10 @@ func (c *Client) Trace(ctx context.Context, name string, opts ...TraceOption) (*
 	if cfg.environment != "" {
 		builder.Environment(cfg.environment)
 	}
-
-	return builder.Create(ctx)
 }
 
-// ============================================================================
-// Simple API on TraceContext
-// ============================================================================
-
-// Span creates a new span with the given name (Simple API).
-// For the Advanced API builder, use NewSpan().
-//
-// Example:
-//
-//	span, err := trace.Span(ctx, "preprocessing",
-//	    langfuse.WithSpanInput(data))
-//	if err != nil {
-//	    return err
-//	}
-//	defer span.End(ctx)
-func (t *TraceContext) Span(ctx context.Context, name string, opts ...SpanOption) (*SpanContext, error) {
-	cfg := &spanConfig{}
-	for _, opt := range opts {
-		opt.apply(cfg)
-	}
-
-	builder := t.NewSpan().Name(name)
-
+// applySpanConfig copies a resolved spanConfig onto a SpanBuilder.
+func applySpanConfig(builder *SpanBuilder, cfg *spanConfig) {
 	if cfg.id != "" {
 		builder.ID(cfg.id)
 	}
@@ -655,28 +622,10 @@ func (t *TraceContext) Span(ctx context.Context, name string, opts ...SpanOption
 	if cfg.hasEndTime {
 		builder.EndTime(cfg.endTime)
 	}
-
-	return builder.Create(ctx)
 }
 
-// Generation creates a new generation with the given name (Simple API).
-// For the Advanced API builder, use NewGeneration().
-//
-// Example:
-//
-//	gen, err := trace.Generation(ctx, "gpt-4-call",
-//	    langfuse.WithModel("gpt-4"),
-//	    langfuse.WithGenerationInput(messages),
-//	    langfuse.WithGenerationOutput(response),
-//	    langfuse.WithTokenUsage(100, 50))
-func (t *TraceContext) Generation(ctx context.Context, name string, opts ...GenerationOption) (*GenerationContext, error) {
-	cfg := &generationConfig{}
-	for _, opt := range opts {
-		opt.apply2(cfg)
-	}
-
-	builder := t.NewGeneration().Name(name)
-
+// applyGenerationConfig copies a resolved generationConfig onto a GenerationBuilder.
+func applyGenerationConfig(builder *GenerationBuilder, cfg *generationConfig) {
 	if cfg.id != "" {
 		builder.ID(cfg.id)
 	}
@@ -725,25 +674,10 @@ func (t *TraceContext) Generation(ctx context.Context, name string, opts ...Gene
 	if cfg.hasCompletionStart {
 		builder.CompletionStartTime(cfg.completionStartTime)
 	}
-
-	return builder.Create(ctx)
 }
 
-// Event creates a new event with the given name (Simple API).
-// For the Advanced API builder, use NewEvent().
-//
-// Example:
-//
-//	err := trace.Event(ctx, "cache-hit",
-//	    langfuse.WithEventMetadata(langfuse.M{"key": cacheKey}))
-func (t *TraceContext) Event(ctx context.Context, name string, opts ...EventOption) error {
-	cfg := &eventConfig{}
-	for _, opt := range opts {
-		opt.apply3(cfg)
-	}
-
-	builder := t.NewEvent().Name(name)
-
+// applyEventConfig copies a resolved eventConfig onto an EventBuilder.
+func applyEventConfig(builder *EventBuilder, cfg *eventConfig) {
 	if cfg.id != "" {
 		builder.ID(cfg.id)
 	}
@@ -771,6 +705,127 @@ func (t *TraceContext) Event(ctx context.Context, name string, opts ...EventOpti
 	if cfg.hasStartTime {
 		builder.StartTime(cfg.startTime)
 	}
+}
+
+// applyScoreOpts resolves ScoreOptions and applies the shared id/comment fields to
+// a ScoreBuilder. The caller selects the value type (numeric/boolean/categorical)
+// before calling this. It returns the resolved scoreConfig in case the caller needs
+// other fields.
+func applyScoreOpts(builder *ScoreBuilder, opts ...ScoreOption) *scoreConfig {
+	cfg := &scoreConfig{}
+	for _, opt := range opts {
+		opt(cfg)
+	}
+	if cfg.id != "" {
+		builder.ID(cfg.id)
+	}
+	if cfg.comment != "" {
+		builder.Comment(cfg.comment)
+	}
+	return cfg
+}
+
+// ============================================================================
+// Simple API on Client
+// ============================================================================
+
+// Trace creates a new trace with the given name.
+//
+// Trace is a convenience wrapper over the canonical fluent builder
+// ([Client.NewTrace]); it resolves the [TraceOption] functions and delegates to
+// the builder. For new code, prefer the fluent builders directly.
+//
+// Example:
+//
+//	trace, err := client.Trace(ctx, "user-request",
+//	    langfuse.WithUserID("user-123"),
+//	    langfuse.WithTags("api", "v2"))
+//	if err != nil {
+//	    return err
+//	}
+//	defer client.Flush(ctx)
+func (c *Client) Trace(ctx context.Context, name string, opts ...TraceOption) (*TraceContext, error) {
+	cfg := &traceConfig{}
+	for _, opt := range opts {
+		opt(cfg)
+	}
+
+	builder := c.NewTrace().Name(name)
+	applyTraceConfig(builder, cfg)
+
+	return builder.Create(ctx)
+}
+
+// ============================================================================
+// Simple API on TraceContext
+// ============================================================================
+
+// Span creates a new span with the given name (Simple API).
+//
+// This is a convenience wrapper over the canonical fluent builder
+// ([TraceContext.NewSpan]); prefer the builder for new code.
+//
+// Example:
+//
+//	span, err := trace.Span(ctx, "preprocessing",
+//	    langfuse.WithSpanInput(data))
+//	if err != nil {
+//	    return err
+//	}
+//	defer span.End(ctx)
+func (t *TraceContext) Span(ctx context.Context, name string, opts ...SpanOption) (*SpanContext, error) {
+	cfg := &spanConfig{}
+	for _, opt := range opts {
+		opt.applySpan(cfg)
+	}
+
+	builder := t.NewSpan().Name(name)
+	applySpanConfig(builder, cfg)
+
+	return builder.Create(ctx)
+}
+
+// Generation creates a new generation with the given name (Simple API).
+//
+// This is a convenience wrapper over the canonical fluent builder
+// ([TraceContext.NewGeneration]); prefer the builder for new code.
+//
+// Example:
+//
+//	gen, err := trace.Generation(ctx, "gpt-4-call",
+//	    langfuse.WithModel("gpt-4"),
+//	    langfuse.WithGenerationInput(messages),
+//	    langfuse.WithGenerationOutput(response),
+//	    langfuse.WithTokenUsage(100, 50))
+func (t *TraceContext) Generation(ctx context.Context, name string, opts ...GenerationOption) (*GenerationContext, error) {
+	cfg := &generationConfig{}
+	for _, opt := range opts {
+		opt.applyGeneration(cfg)
+	}
+
+	builder := t.NewGeneration().Name(name)
+	applyGenerationConfig(builder, cfg)
+
+	return builder.Create(ctx)
+}
+
+// Event creates a new event with the given name (Simple API).
+//
+// This is a convenience wrapper over the canonical fluent builder
+// ([TraceContext.NewEvent]); prefer the builder for new code.
+//
+// Example:
+//
+//	err := trace.Event(ctx, "cache-hit",
+//	    langfuse.WithEventMetadata(langfuse.M{"key": cacheKey}))
+func (t *TraceContext) Event(ctx context.Context, name string, opts ...EventOption) error {
+	cfg := &eventConfig{}
+	for _, opt := range opts {
+		opt.applyEvent(cfg)
+	}
+
+	builder := t.NewEvent().Name(name)
+	applyEventConfig(builder, cfg)
 
 	return builder.Create(ctx)
 }
@@ -803,71 +858,44 @@ func (t *TraceContext) Complete(ctx context.Context) error {
 
 // Score adds a numeric score to this trace (Simple API).
 //
+// This is a convenience wrapper over the canonical fluent builder
+// ([TraceContext.NewScore]); prefer the builder for new code.
+//
 // Example:
 //
 //	err := trace.Score(ctx, "quality", 0.95,
 //	    langfuse.WithComment("excellent response"))
 func (t *TraceContext) Score(ctx context.Context, name string, value float64, opts ...ScoreOption) error {
-	cfg := &scoreConfig{}
-	for _, opt := range opts {
-		opt(cfg)
-	}
-
 	builder := t.NewScore().Name(name).NumericValue(value)
-
-	if cfg.id != "" {
-		builder.ID(cfg.id)
-	}
-	if cfg.comment != "" {
-		builder.Comment(cfg.comment)
-	}
-
+	applyScoreOpts(builder, opts...)
 	return builder.Create(ctx)
 }
 
 // ScoreBool adds a boolean score to this trace (Simple API).
 //
+// This is a convenience wrapper over the canonical fluent builder
+// ([TraceContext.NewScore]); prefer the builder for new code.
+//
 // Example:
 //
 //	err := trace.ScoreBool(ctx, "passed", true)
 func (t *TraceContext) ScoreBool(ctx context.Context, name string, value bool, opts ...ScoreOption) error {
-	cfg := &scoreConfig{}
-	for _, opt := range opts {
-		opt(cfg)
-	}
-
 	builder := t.NewScore().Name(name).BooleanValue(value)
-
-	if cfg.id != "" {
-		builder.ID(cfg.id)
-	}
-	if cfg.comment != "" {
-		builder.Comment(cfg.comment)
-	}
-
+	applyScoreOpts(builder, opts...)
 	return builder.Create(ctx)
 }
 
 // ScoreCategory adds a categorical score to this trace (Simple API).
 //
+// This is a convenience wrapper over the canonical fluent builder
+// ([TraceContext.NewScore]); prefer the builder for new code.
+//
 // Example:
 //
 //	err := trace.ScoreCategory(ctx, "rating", "excellent")
 func (t *TraceContext) ScoreCategory(ctx context.Context, name string, value string, opts ...ScoreOption) error {
-	cfg := &scoreConfig{}
-	for _, opt := range opts {
-		opt(cfg)
-	}
-
 	builder := t.NewScore().Name(name).CategoricalValue(value)
-
-	if cfg.id != "" {
-		builder.ID(cfg.id)
-	}
-	if cfg.comment != "" {
-		builder.Comment(cfg.comment)
-	}
-
+	applyScoreOpts(builder, opts...)
 	return builder.Create(ctx)
 }
 
@@ -876,169 +904,60 @@ func (t *TraceContext) ScoreCategory(ctx context.Context, name string, value str
 // ============================================================================
 
 // Span creates a child span (Simple API).
-// For the Advanced API builder, use NewSpan().
+//
+// This is a convenience wrapper over the canonical fluent builder
+// ([SpanContext.NewSpan]); prefer the builder for new code.
 func (s *SpanContext) Span(ctx context.Context, name string, opts ...SpanOption) (*SpanContext, error) {
 	cfg := &spanConfig{}
 	for _, opt := range opts {
-		opt.apply(cfg)
+		opt.applySpan(cfg)
 	}
 
 	builder := s.NewSpan().Name(name)
-
-	if cfg.id != "" {
-		builder.ID(cfg.id)
-	}
-	if cfg.input != nil {
-		builder.Input(cfg.input)
-	}
-	if cfg.output != nil {
-		builder.Output(cfg.output)
-	}
-	if cfg.metadata != nil {
-		builder.Metadata(cfg.metadata)
-	}
-	if cfg.hasLevel {
-		builder.Level(cfg.level)
-	}
-	if cfg.statusMessage != "" {
-		builder.StatusMessage(cfg.statusMessage)
-	}
-	if cfg.version != "" {
-		builder.Version(cfg.version)
-	}
-	if cfg.environment != "" {
-		builder.Environment(cfg.environment)
-	}
-	if cfg.hasStartTime {
-		builder.StartTime(cfg.startTime)
-	}
-	if cfg.hasEndTime {
-		builder.EndTime(cfg.endTime)
-	}
+	applySpanConfig(builder, cfg)
 
 	return builder.Create(ctx)
 }
 
 // Generation creates a child generation (Simple API).
-// For the Advanced API builder, use NewGeneration().
+//
+// This is a convenience wrapper over the canonical fluent builder
+// ([SpanContext.NewGeneration]); prefer the builder for new code.
 func (s *SpanContext) Generation(ctx context.Context, name string, opts ...GenerationOption) (*GenerationContext, error) {
 	cfg := &generationConfig{}
 	for _, opt := range opts {
-		opt.apply2(cfg)
+		opt.applyGeneration(cfg)
 	}
 
 	builder := s.NewGeneration().Name(name)
-
-	if cfg.id != "" {
-		builder.ID(cfg.id)
-	}
-	if cfg.model != "" {
-		builder.Model(cfg.model)
-	}
-	if cfg.modelParameters != nil {
-		builder.ModelParameters(cfg.modelParameters)
-	}
-	if cfg.input != nil {
-		builder.Input(cfg.input)
-	}
-	if cfg.output != nil {
-		builder.Output(cfg.output)
-	}
-	if cfg.metadata != nil {
-		builder.Metadata(cfg.metadata)
-	}
-	if cfg.hasLevel {
-		builder.Level(cfg.level)
-	}
-	if cfg.statusMessage != "" {
-		builder.StatusMessage(cfg.statusMessage)
-	}
-	if cfg.version != "" {
-		builder.Version(cfg.version)
-	}
-	if cfg.environment != "" {
-		builder.Environment(cfg.environment)
-	}
-	if cfg.usage != nil {
-		builder.Usage(cfg.usage)
-	}
-	if cfg.promptName != "" {
-		builder.PromptName(cfg.promptName)
-	}
-	if cfg.hasPromptVersion {
-		builder.PromptVersion(cfg.promptVersion)
-	}
-	if cfg.hasStartTime {
-		builder.StartTime(cfg.startTime)
-	}
-	if cfg.hasEndTime {
-		builder.EndTime(cfg.endTime)
-	}
-	if cfg.hasCompletionStart {
-		builder.CompletionStartTime(cfg.completionStartTime)
-	}
+	applyGenerationConfig(builder, cfg)
 
 	return builder.Create(ctx)
 }
 
 // Event creates a child event (Simple API).
-// For the Advanced API builder, use NewEvent().
+//
+// This is a convenience wrapper over the canonical fluent builder
+// ([SpanContext.NewEvent]); prefer the builder for new code.
 func (s *SpanContext) Event(ctx context.Context, name string, opts ...EventOption) error {
 	cfg := &eventConfig{}
 	for _, opt := range opts {
-		opt.apply3(cfg)
+		opt.applyEvent(cfg)
 	}
 
 	builder := s.NewEvent().Name(name)
-
-	if cfg.id != "" {
-		builder.ID(cfg.id)
-	}
-	if cfg.input != nil {
-		builder.Input(cfg.input)
-	}
-	if cfg.output != nil {
-		builder.Output(cfg.output)
-	}
-	if cfg.metadata != nil {
-		builder.Metadata(cfg.metadata)
-	}
-	if cfg.hasLevel {
-		builder.Level(cfg.level)
-	}
-	if cfg.statusMessage != "" {
-		builder.StatusMessage(cfg.statusMessage)
-	}
-	if cfg.version != "" {
-		builder.Version(cfg.version)
-	}
-	if cfg.environment != "" {
-		builder.Environment(cfg.environment)
-	}
-	if cfg.hasStartTime {
-		builder.StartTime(cfg.startTime)
-	}
+	applyEventConfig(builder, cfg)
 
 	return builder.Create(ctx)
 }
 
 // Score adds a numeric score to this span (Simple API).
-// For the Advanced API builder, use NewScore().
+//
+// This is a convenience wrapper over the canonical fluent builder
+// ([SpanContext.NewScore]); prefer the builder for new code.
 func (s *SpanContext) Score(ctx context.Context, name string, value float64, opts ...ScoreOption) error {
-	cfg := &scoreConfig{}
-	for _, opt := range opts {
-		opt(cfg)
-	}
-
 	builder := s.NewScore().Name(name).NumericValue(value)
-
-	if cfg.id != "" {
-		builder.ID(cfg.id)
-	}
-	if cfg.comment != "" {
-		builder.Comment(cfg.comment)
-	}
-
+	applyScoreOpts(builder, opts...)
 	return builder.Create(ctx)
 }
 
@@ -1047,169 +966,60 @@ func (s *SpanContext) Score(ctx context.Context, name string, value float64, opt
 // ============================================================================
 
 // Span creates a child span (Simple API).
-// For the Advanced API builder, use NewSpan().
+//
+// This is a convenience wrapper over the canonical fluent builder
+// ([GenerationContext.NewSpan]); prefer the builder for new code.
 func (g *GenerationContext) Span(ctx context.Context, name string, opts ...SpanOption) (*SpanContext, error) {
 	cfg := &spanConfig{}
 	for _, opt := range opts {
-		opt.apply(cfg)
+		opt.applySpan(cfg)
 	}
 
 	builder := g.NewSpan().Name(name)
-
-	if cfg.id != "" {
-		builder.ID(cfg.id)
-	}
-	if cfg.input != nil {
-		builder.Input(cfg.input)
-	}
-	if cfg.output != nil {
-		builder.Output(cfg.output)
-	}
-	if cfg.metadata != nil {
-		builder.Metadata(cfg.metadata)
-	}
-	if cfg.hasLevel {
-		builder.Level(cfg.level)
-	}
-	if cfg.statusMessage != "" {
-		builder.StatusMessage(cfg.statusMessage)
-	}
-	if cfg.version != "" {
-		builder.Version(cfg.version)
-	}
-	if cfg.environment != "" {
-		builder.Environment(cfg.environment)
-	}
-	if cfg.hasStartTime {
-		builder.StartTime(cfg.startTime)
-	}
-	if cfg.hasEndTime {
-		builder.EndTime(cfg.endTime)
-	}
+	applySpanConfig(builder, cfg)
 
 	return builder.Create(ctx)
 }
 
 // Generation creates a child generation (Simple API).
-// For the Advanced API builder, use NewGeneration().
+//
+// This is a convenience wrapper over the canonical fluent builder
+// ([GenerationContext.NewGeneration]); prefer the builder for new code.
 func (g *GenerationContext) Generation(ctx context.Context, name string, opts ...GenerationOption) (*GenerationContext, error) {
 	cfg := &generationConfig{}
 	for _, opt := range opts {
-		opt.apply2(cfg)
+		opt.applyGeneration(cfg)
 	}
 
 	builder := g.NewGeneration().Name(name)
-
-	if cfg.id != "" {
-		builder.ID(cfg.id)
-	}
-	if cfg.model != "" {
-		builder.Model(cfg.model)
-	}
-	if cfg.modelParameters != nil {
-		builder.ModelParameters(cfg.modelParameters)
-	}
-	if cfg.input != nil {
-		builder.Input(cfg.input)
-	}
-	if cfg.output != nil {
-		builder.Output(cfg.output)
-	}
-	if cfg.metadata != nil {
-		builder.Metadata(cfg.metadata)
-	}
-	if cfg.hasLevel {
-		builder.Level(cfg.level)
-	}
-	if cfg.statusMessage != "" {
-		builder.StatusMessage(cfg.statusMessage)
-	}
-	if cfg.version != "" {
-		builder.Version(cfg.version)
-	}
-	if cfg.environment != "" {
-		builder.Environment(cfg.environment)
-	}
-	if cfg.usage != nil {
-		builder.Usage(cfg.usage)
-	}
-	if cfg.promptName != "" {
-		builder.PromptName(cfg.promptName)
-	}
-	if cfg.hasPromptVersion {
-		builder.PromptVersion(cfg.promptVersion)
-	}
-	if cfg.hasStartTime {
-		builder.StartTime(cfg.startTime)
-	}
-	if cfg.hasEndTime {
-		builder.EndTime(cfg.endTime)
-	}
-	if cfg.hasCompletionStart {
-		builder.CompletionStartTime(cfg.completionStartTime)
-	}
+	applyGenerationConfig(builder, cfg)
 
 	return builder.Create(ctx)
 }
 
 // Event creates a child event (Simple API).
-// For the Advanced API builder, use NewEvent().
+//
+// This is a convenience wrapper over the canonical fluent builder
+// ([GenerationContext.NewEvent]); prefer the builder for new code.
 func (g *GenerationContext) Event(ctx context.Context, name string, opts ...EventOption) error {
 	cfg := &eventConfig{}
 	for _, opt := range opts {
-		opt.apply3(cfg)
+		opt.applyEvent(cfg)
 	}
 
 	builder := g.NewEvent().Name(name)
-
-	if cfg.id != "" {
-		builder.ID(cfg.id)
-	}
-	if cfg.input != nil {
-		builder.Input(cfg.input)
-	}
-	if cfg.output != nil {
-		builder.Output(cfg.output)
-	}
-	if cfg.metadata != nil {
-		builder.Metadata(cfg.metadata)
-	}
-	if cfg.hasLevel {
-		builder.Level(cfg.level)
-	}
-	if cfg.statusMessage != "" {
-		builder.StatusMessage(cfg.statusMessage)
-	}
-	if cfg.version != "" {
-		builder.Version(cfg.version)
-	}
-	if cfg.environment != "" {
-		builder.Environment(cfg.environment)
-	}
-	if cfg.hasStartTime {
-		builder.StartTime(cfg.startTime)
-	}
+	applyEventConfig(builder, cfg)
 
 	return builder.Create(ctx)
 }
 
 // Score adds a numeric score to this generation (Simple API).
-// For the Advanced API builder, use NewScore().
+//
+// This is a convenience wrapper over the canonical fluent builder
+// ([GenerationContext.NewScore]); prefer the builder for new code.
 func (g *GenerationContext) Score(ctx context.Context, name string, value float64, opts ...ScoreOption) error {
-	cfg := &scoreConfig{}
-	for _, opt := range opts {
-		opt(cfg)
-	}
-
 	builder := g.NewScore().Name(name).NumericValue(value)
-
-	if cfg.id != "" {
-		builder.ID(cfg.id)
-	}
-	if cfg.comment != "" {
-		builder.Comment(cfg.comment)
-	}
-
+	applyScoreOpts(builder, opts...)
 	return builder.Create(ctx)
 }
 
@@ -1448,384 +1258,34 @@ func WithGeneration(ctx context.Context, trace *TraceContext, model string, inpu
 }
 
 // ============================================================================
-// V1 API - Simplified Client Creation
+// Simplified Client Creation
 // ============================================================================
 
-// NewClient creates a new Langfuse client with the simplified v1 API.
-// This function returns the client directly without an error.
+// MustNew is a convenience constructor that wraps [New] with a panic-on-error
+// signature, returning the client directly without an error.
 //
-// If configuration fails due to invalid credentials or other issues,
-// the function will panic. For explicit error handling, use New()
-// or NewWithConfig() instead.
+// If configuration fails due to invalid credentials or other issues, MustNew
+// panics. Use it only when initialization failures should be fatal (for example,
+// at program startup with credentials sourced from the environment). For explicit
+// error handling, use [New] or [NewWithConfig] instead.
 //
 // Example:
 //
-//	client := langfuse.NewClient("pk-lf-xxx", "sk-lf-xxx")
+//	client := langfuse.MustNew("pk-lf-xxx", "sk-lf-xxx")
 //	defer client.Shutdown(context.Background())
 //
 //	trace, _ := client.Trace(ctx, "user-request",
 //	    langfuse.WithUserID("user-123"))
-func NewClient(publicKey, secretKey string, opts ...ConfigOption) *Client {
+func MustNew(publicKey, secretKey string, opts ...ConfigOption) *Client {
 	client, err := New(publicKey, secretKey, opts...)
 	if err != nil {
-		panic("langfuse: NewClient failed: " + err.Error())
+		panic("langfuse: MustNew failed: " + err.Error())
 	}
 	return client
 }
 
-// MustClient is an alias for NewClient that clearly indicates it panics on error.
-// Use this when initialization failures should be fatal.
-func MustClient(publicKey, secretKey string, opts ...ConfigOption) *Client {
-	return NewClient(publicKey, secretKey, opts...)
-}
-
-// TryClient creates a new Langfuse client, returning nil if initialization fails.
-// Use this when you want optional observability that gracefully degrades.
-//
-// Example:
-//
-//	client := langfuse.TryClient("pk-lf-xxx", "sk-lf-xxx")
-//	if client != nil {
-//	    defer client.Shutdown(context.Background())
-//	}
-func TryClient(publicKey, secretKey string, opts ...ConfigOption) *Client {
-	client, _ := New(publicKey, secretKey, opts...)
-	return client
-}
-
 // ============================================================================
-// V1 API - Context-First Trace Creation
-// ============================================================================
-
-// TraceV1 creates a new trace with context-first approach.
-// This is an alias for Trace() that matches the v1 API naming convention.
-//
-// Example:
-//
-//	trace, err := client.TraceV1(ctx, "user-request",
-//	    langfuse.WithUserID("user-123"),
-//	    langfuse.WithTags("api", "v2"))
-func (c *Client) TraceV1(ctx context.Context, name string, opts ...TraceOption) (*TraceContext, error) {
-	return c.Trace(ctx, name, opts...)
-}
-
-// ============================================================================
-// V1 API - Context-First Span Creation
-// ============================================================================
-
-// NewSpanV1 creates a new span with context-first approach (v1 API).
-// This is an alias for Span() that matches the v1 API naming convention.
-//
-// Example:
-//
-//	span, err := trace.NewSpanV1(ctx, "processing",
-//	    langfuse.WithSpanInput(data))
-func (t *TraceContext) NewSpanV1(ctx context.Context, name string, opts ...SpanOption) (*SpanContext, error) {
-	return t.Span(ctx, name, opts...)
-}
-
-// NewSpanV1 on SpanContext creates a child span with context-first approach (v1 API).
-func (s *SpanContext) NewSpanV1(ctx context.Context, name string, opts ...SpanOption) (*SpanContext, error) {
-	return s.Span(ctx, name, opts...)
-}
-
-// NewSpanV1 on GenerationContext creates a child span with context-first approach (v1 API).
-func (g *GenerationContext) NewSpanV1(ctx context.Context, name string, opts ...SpanOption) (*SpanContext, error) {
-	return g.Span(ctx, name, opts...)
-}
-
-// ============================================================================
-// V1 API - Context-First Generation Creation
-// ============================================================================
-
-// NewGenerationV1 creates a new generation with context-first approach (v1 API).
-// This is an alias for Generation() that matches the v1 API naming convention.
-//
-// Example:
-//
-//	gen, err := trace.NewGenerationV1(ctx, "llm-call",
-//	    langfuse.WithModel("gpt-4"),
-//	    langfuse.WithGenerationInput(messages))
-func (t *TraceContext) NewGenerationV1(ctx context.Context, name string, opts ...GenerationOption) (*GenerationContext, error) {
-	return t.Generation(ctx, name, opts...)
-}
-
-// NewGenerationV1 on SpanContext creates a child generation (v1 API).
-func (s *SpanContext) NewGenerationV1(ctx context.Context, name string, opts ...GenerationOption) (*GenerationContext, error) {
-	return s.Generation(ctx, name, opts...)
-}
-
-// NewGenerationV1 on GenerationContext creates a child generation (v1 API).
-func (g *GenerationContext) NewGenerationV1(ctx context.Context, name string, opts ...GenerationOption) (*GenerationContext, error) {
-	return g.Generation(ctx, name, opts...)
-}
-
-// ============================================================================
-// V1 API - Context-First Event Creation
-// ============================================================================
-
-// NewEventV1 creates a new event with context-first approach (v1 API).
-//
-// Example:
-//
-//	err := trace.NewEventV1(ctx, "cache-hit",
-//	    langfuse.WithEventMetadata(langfuse.M{"key": cacheKey}))
-func (t *TraceContext) NewEventV1(ctx context.Context, name string, opts ...EventOption) error {
-	return t.Event(ctx, name, opts...)
-}
-
-// NewEventV1 on SpanContext creates a child event (v1 API).
-func (s *SpanContext) NewEventV1(ctx context.Context, name string, opts ...EventOption) error {
-	return s.Event(ctx, name, opts...)
-}
-
-// NewEventV1 on GenerationContext creates a child event (v1 API).
-func (g *GenerationContext) NewEventV1(ctx context.Context, name string, opts ...EventOption) error {
-	return g.Event(ctx, name, opts...)
-}
-
-// ============================================================================
-// V1 API - Unified Update Methods
-// ============================================================================
-
-// updateConfig holds the configuration for updating an entity.
-type updateConfig struct {
-	output    any
-	metadata  Metadata
-	tags      []string
-	hasTags   bool
-	input     any
-	level     ObservationLevel
-	hasLevel  bool
-	statusMsg string
-	name      string
-	userID    string
-	sessionID string
-	public    bool
-	hasPublic bool
-}
-
-// UpdateOption configures an update operation.
-type UpdateOption func(*updateConfig)
-
-// WithUpdateOutput sets the output for an update operation.
-func WithUpdateOutput(output any) UpdateOption {
-	return func(c *updateConfig) {
-		c.output = output
-	}
-}
-
-// WithUpdateMetadata sets the metadata for an update operation.
-func WithUpdateMetadata(metadata Metadata) UpdateOption {
-	return func(c *updateConfig) {
-		c.metadata = metadata
-	}
-}
-
-// WithUpdateTags sets the tags for an update operation.
-func WithUpdateTags(tags ...string) UpdateOption {
-	return func(c *updateConfig) {
-		c.tags = tags
-		c.hasTags = true
-	}
-}
-
-// WithUpdateInput sets the input for an update operation.
-func WithUpdateInput(input any) UpdateOption {
-	return func(c *updateConfig) {
-		c.input = input
-	}
-}
-
-// WithUpdateLevel sets the observation level for an update operation.
-func WithUpdateLevel(level ObservationLevel) UpdateOption {
-	return func(c *updateConfig) {
-		c.level = level
-		c.hasLevel = true
-	}
-}
-
-// WithUpdateStatusMessage sets the status message for an update operation.
-func WithUpdateStatusMessage(msg string) UpdateOption {
-	return func(c *updateConfig) {
-		c.statusMsg = msg
-	}
-}
-
-// WithUpdateName sets the name for an update operation.
-func WithUpdateName(name string) UpdateOption {
-	return func(c *updateConfig) {
-		c.name = name
-	}
-}
-
-// WithUpdateUserID sets the user ID for a trace update.
-func WithUpdateUserID(userID string) UpdateOption {
-	return func(c *updateConfig) {
-		c.userID = userID
-	}
-}
-
-// WithUpdateSessionID sets the session ID for a trace update.
-func WithUpdateSessionID(sessionID string) UpdateOption {
-	return func(c *updateConfig) {
-		c.sessionID = sessionID
-	}
-}
-
-// WithUpdatePublic sets whether a trace is public.
-func WithUpdatePublic(public bool) UpdateOption {
-	return func(c *updateConfig) {
-		c.public = public
-		c.hasPublic = true
-	}
-}
-
-// UpdateV1 updates the trace with the provided options and returns the trace context.
-// This provides a unified, consistent API for updates.
-//
-// Example:
-//
-//	trace, err = trace.UpdateV1(ctx,
-//	    langfuse.WithUpdateOutput(response),
-//	    langfuse.WithUpdateTags("completed"))
-func (t *TraceContext) UpdateV1(ctx context.Context, opts ...UpdateOption) (*TraceContext, error) {
-	cfg := &updateConfig{}
-	for _, opt := range opts {
-		opt(cfg)
-	}
-
-	update := t.Update()
-
-	if cfg.name != "" {
-		update.Name(cfg.name)
-	}
-	if cfg.userID != "" {
-		update.UserID(cfg.userID)
-	}
-	if cfg.sessionID != "" {
-		update.SessionID(cfg.sessionID)
-	}
-	if cfg.input != nil {
-		update.Input(cfg.input)
-	}
-	if cfg.output != nil {
-		update.Output(cfg.output)
-	}
-	if cfg.metadata != nil {
-		update.Metadata(cfg.metadata)
-	}
-	if cfg.hasTags {
-		update.Tags(cfg.tags)
-	}
-	if cfg.hasPublic {
-		update.Public(cfg.public)
-	}
-
-	if err := update.Apply(ctx); err != nil {
-		return nil, err
-	}
-
-	return t, nil
-}
-
-// ============================================================================
-// V1 API - Unified End Methods with Consistent Return Types
-// ============================================================================
-
-// EndV1 ends the span with the provided options and returns the span context.
-// This provides a consistent (result, error) return pattern.
-//
-// Example:
-//
-//	span, err := span.EndV1(ctx,
-//	    langfuse.WithEndOutput(response),
-//	    langfuse.WithEndMetadata(langfuse.M{"cached": true}))
-func (s *SpanContext) EndV1(ctx context.Context, opts ...EndOption) (*SpanContext, error) {
-	result := s.EndWith(ctx, opts...)
-	if result.Error != nil {
-		return nil, result.Error
-	}
-	return s, nil
-}
-
-// EndV1 ends the generation with the provided options and returns the generation context.
-// This provides a consistent (result, error) return pattern.
-//
-// Example:
-//
-//	gen, err := gen.EndV1(ctx,
-//	    langfuse.WithEndOutput(response),
-//	    langfuse.WithUsage(100, 50))
-func (g *GenerationContext) EndV1(ctx context.Context, opts ...EndOption) (*GenerationContext, error) {
-	result := g.EndWith(ctx, opts...)
-	if result.Error != nil {
-		return nil, result.Error
-	}
-	return g, nil
-}
-
-// ============================================================================
-// V1 API - Additional End Options
-// ============================================================================
-
-// WithEndOutput is an alias for WithOutput, provided for v1 API clarity.
-func WithEndOutput(output any) EndOption {
-	return WithOutput(output)
-}
-
-// WithEndDuration sets the end time based on a duration from start.
-// This is useful when you've measured the operation duration separately.
-//
-// Example:
-//
-//	gen.EndV1(ctx, langfuse.WithEndDuration(800*time.Millisecond))
-func WithEndDuration(d time.Duration) EndOption {
-	return func(c *endConfig) {
-		// Duration is calculated from "now" - so we set endTime to now
-		// The actual duration tracking happens via start/end time difference
-		c.endTime = time.Now()
-		c.hasEndTime = true
-	}
-}
-
-// ============================================================================
-// V1 API - Additional Span Options
-// ============================================================================
-
-// WithSpanLevel sets the observation level for a span.
-// This is an alias for WithLevel with a clearer name.
-func WithSpanLevel(level ObservationLevel) SpanOption {
-	return WithLevel(level)
-}
-
-// ============================================================================
-// V1 API - Additional Score Options
-// ============================================================================
-
-// WithScoreComment sets a comment for the score.
-// This is an alias for WithComment with a clearer name.
-func WithScoreComment(comment string) ScoreOption {
-	return WithComment(comment)
-}
-
-// WithScoreDataType sets the data type for the score.
-// Uses the ScoreDataType constants from types.go.
-func WithScoreDataType(dataType ScoreDataType) ScoreOption {
-	return func(c *scoreConfig) {
-		// Note: The score config doesn't have a dataType field yet,
-		// but this is a placeholder for future enhancement
-	}
-}
-
-// ============================================================================
-// V1 API - Client Statistics
-// ============================================================================
-// Note: ClientStats and Stats() are defined in metrics.go with a comprehensive
-// implementation. Use client.Stats() to get current statistics.
-
-// ============================================================================
-// V1 API - Scorer Interface
+// Scorer Interface
 // ============================================================================
 
 // Scorer defines the interface for adding scores to observations.
@@ -1849,97 +1309,34 @@ var (
 
 // ScoreBool on SpanContext adds a boolean score (implements Scorer interface).
 func (s *SpanContext) ScoreBool(ctx context.Context, name string, value bool, opts ...ScoreOption) error {
-	cfg := &scoreConfig{}
-	for _, opt := range opts {
-		opt(cfg)
-	}
-
 	builder := s.NewScore().Name(name).BooleanValue(value)
-
-	if cfg.id != "" {
-		builder.ID(cfg.id)
-	}
-	if cfg.comment != "" {
-		builder.Comment(cfg.comment)
-	}
-
+	applyScoreOpts(builder, opts...)
 	return builder.Create(ctx)
 }
 
 // ScoreCategory on SpanContext adds a categorical score (implements Scorer interface).
 func (s *SpanContext) ScoreCategory(ctx context.Context, name string, value string, opts ...ScoreOption) error {
-	cfg := &scoreConfig{}
-	for _, opt := range opts {
-		opt(cfg)
-	}
-
 	builder := s.NewScore().Name(name).CategoricalValue(value)
-
-	if cfg.id != "" {
-		builder.ID(cfg.id)
-	}
-	if cfg.comment != "" {
-		builder.Comment(cfg.comment)
-	}
-
+	applyScoreOpts(builder, opts...)
 	return builder.Create(ctx)
 }
 
 // ScoreBool on GenerationContext adds a boolean score (implements Scorer interface).
 func (g *GenerationContext) ScoreBool(ctx context.Context, name string, value bool, opts ...ScoreOption) error {
-	cfg := &scoreConfig{}
-	for _, opt := range opts {
-		opt(cfg)
-	}
-
 	builder := g.NewScore().Name(name).BooleanValue(value)
-
-	if cfg.id != "" {
-		builder.ID(cfg.id)
-	}
-	if cfg.comment != "" {
-		builder.Comment(cfg.comment)
-	}
-
+	applyScoreOpts(builder, opts...)
 	return builder.Create(ctx)
 }
 
 // ScoreCategory on GenerationContext adds a categorical score (implements Scorer interface).
 func (g *GenerationContext) ScoreCategory(ctx context.Context, name string, value string, opts ...ScoreOption) error {
-	cfg := &scoreConfig{}
-	for _, opt := range opts {
-		opt(cfg)
-	}
-
 	builder := g.NewScore().Name(name).CategoricalValue(value)
-
-	if cfg.id != "" {
-		builder.ID(cfg.id)
-	}
-	if cfg.comment != "" {
-		builder.Comment(cfg.comment)
-	}
-
+	applyScoreOpts(builder, opts...)
 	return builder.Create(ctx)
 }
 
 // ============================================================================
-// V1 API - Context Helper for Traces
-// ============================================================================
-
-// TraceContextV1 is an extended trace context that provides v1 API methods.
-// It wraps TraceContext and adds the NewXxx naming convention methods.
-type TraceContextV1 struct {
-	*TraceContext
-}
-
-// WrapTraceContext wraps a TraceContext to provide v1 API naming.
-func WrapTraceContext(t *TraceContext) *TraceContextV1 {
-	return &TraceContextV1{TraceContext: t}
-}
-
-// ============================================================================
-// V1 API - ContextWithTrace alias for clearer naming
+// Context Helpers for Observations
 // ============================================================================
 
 // ContextWithObservation stores either a trace or span in context.

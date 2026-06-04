@@ -2,7 +2,9 @@ package http
 
 import (
 	"errors"
+	"fmt"
 	"net/url"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -35,6 +37,26 @@ func (e *mockRetryAfterError) SuggestedRetryAfter() time.Duration {
 
 func (e *mockRetryAfterError) IsRetryable() bool {
 	return true
+}
+
+// mockAPIError models a server APIError (e.g. a 503) that carries both
+// retryability and a Retry-After hint, mirroring pkg/errors.APIError. It is used
+// to verify retry detection survives error wrapping via fmt.Errorf("...: %w", err).
+type mockAPIError struct {
+	statusCode int
+	retryAfter time.Duration
+}
+
+func (e *mockAPIError) Error() string {
+	return fmt.Sprintf("API error: status %d", e.statusCode)
+}
+
+func (e *mockAPIError) IsRetryable() bool {
+	return e.statusCode == 429 || (e.statusCode >= 500 && e.statusCode < 600)
+}
+
+func (e *mockAPIError) SuggestedRetryAfter() time.Duration {
+	return e.retryAfter
 }
 
 // TestExponentialBackoff_ShouldRetry tests the ShouldRetry method.
@@ -136,6 +158,55 @@ func TestExponentialBackoff_RetryDelay(t *testing.T) {
 	}
 }
 
+// TestExponentialBackoff_JitterNeverExceedsMaxDelay verifies that MaxDelay is a
+// true upper bound even with jitter enabled. The cap is applied AFTER jitter, so
+// across many samples at/above MaxDelay the returned delay must never exceed
+// MaxDelay and must always be positive.
+func TestExponentialBackoff_JitterNeverExceedsMaxDelay(t *testing.T) {
+	backoff := &ExponentialBackoff{
+		InitialDelay: 100 * time.Millisecond,
+		MaxDelay:     1 * time.Second,
+		Multiplier:   2.0,
+		Jitter:       true,
+		MaxRetries:   10,
+	}
+
+	maxDelay := 1 * time.Second
+	// Use high attempt numbers so the pre-jitter delay is already at/above
+	// MaxDelay; with the old code the 1.5x jitter factor would push it to ~1.5s.
+	for _, attempt := range []int{5, 6, 7, 8, 9, 10, 20} {
+		for i := 0; i < 1000; i++ {
+			d := backoff.RetryDelay(attempt)
+			if d > maxDelay {
+				t.Fatalf("RetryDelay(%d) = %v exceeds MaxDelay %v", attempt, d, maxDelay)
+			}
+			if d <= 0 {
+				t.Fatalf("RetryDelay(%d) = %v, expected a positive delay", attempt, d)
+			}
+		}
+	}
+}
+
+// TestExponentialBackoff_JitterTinyDelayStaysPositive verifies the floor guard:
+// even with a sub-nanosecond InitialDelay and the low end of the jitter range,
+// the returned delay is never zero or negative.
+func TestExponentialBackoff_JitterTinyDelayStaysPositive(t *testing.T) {
+	backoff := &ExponentialBackoff{
+		InitialDelay: 1, // 1 nanosecond
+		MaxDelay:     1 * time.Second,
+		Multiplier:   2.0,
+		Jitter:       true,
+		MaxRetries:   10,
+	}
+
+	for i := 0; i < 1000; i++ {
+		d := backoff.RetryDelay(0)
+		if d <= 0 {
+			t.Fatalf("RetryDelay(0) = %v, expected a positive delay", d)
+		}
+	}
+}
+
 // TestExponentialBackoff_RetryDelayWithError tests RetryDelayWithError.
 func TestExponentialBackoff_RetryDelayWithError(t *testing.T) {
 	backoff := &ExponentialBackoff{
@@ -179,6 +250,62 @@ func TestExponentialBackoff_RetryDelayWithError(t *testing.T) {
 				t.Errorf("RetryDelayWithError(%d, %v) = %v, expected %v", tt.attempt, tt.err, result, tt.expected)
 			}
 		})
+	}
+}
+
+// TestExponentialBackoff_WrappedRetryableError verifies that retry detection
+// survives error wrapping. A retryable 503 APIError carrying a Retry-After is
+// wrapped via fmt.Errorf("...: %w", err); both ShouldRetry and
+// RetryDelayWithError must still see through the wrapper via errors.As.
+//
+// Before the errors.As fix (bare type assertions err.(RetryableError) /
+// err.(RetryAfterError)), the wrapped error is no longer the concrete type, so
+// ShouldRetry would fall back to IsRetryableNetworkError (false) and
+// RetryDelayWithError would ignore the Retry-After and return the calculated
+// backoff instead.
+func TestExponentialBackoff_WrappedRetryableError(t *testing.T) {
+	backoff := &ExponentialBackoff{
+		InitialDelay: 100 * time.Millisecond,
+		MaxDelay:     1 * time.Second,
+		Multiplier:   2.0,
+		Jitter:       false,
+		MaxRetries:   3,
+	}
+
+	apiErr := &mockAPIError{statusCode: 503, retryAfter: 500 * time.Millisecond}
+	wrapped := fmt.Errorf("request failed: %w", apiErr)
+
+	// Sanity check: the wrapper is not the concrete type, so a bare assertion
+	// would miss it.
+	if _, ok := wrapped.(RetryableError); ok {
+		t.Fatal("expected wrapped error to NOT satisfy a bare RetryableError assertion")
+	}
+
+	// ShouldRetry must classify the wrapped retryable error as retryable.
+	if !backoff.ShouldRetry(0, wrapped) {
+		t.Error("ShouldRetry(0, wrapped 503) = false, expected true")
+	}
+
+	// RetryDelayWithError must honor the server's Retry-After through the wrapper.
+	if got := backoff.RetryDelayWithError(0, wrapped); got != 500*time.Millisecond {
+		t.Errorf("RetryDelayWithError(0, wrapped) = %v, expected 500ms (server Retry-After)", got)
+	}
+}
+
+// TestRetryStrategies_WrappedRetryableError verifies FixedDelay and
+// LinearBackoff also see through wrapped retryable errors via errors.As.
+func TestRetryStrategies_WrappedRetryableError(t *testing.T) {
+	apiErr := &mockAPIError{statusCode: 503}
+	wrapped := fmt.Errorf("request failed: %w", apiErr)
+
+	fd := NewFixedDelay(100*time.Millisecond, 3)
+	if !fd.ShouldRetry(0, wrapped) {
+		t.Error("FixedDelay.ShouldRetry(0, wrapped 503) = false, expected true")
+	}
+
+	lb := NewLinearBackoff(100*time.Millisecond, 50*time.Millisecond, 3)
+	if !lb.ShouldRetry(0, wrapped) {
+		t.Error("LinearBackoff.ShouldRetry(0, wrapped 503) = false, expected true")
 	}
 }
 
@@ -268,6 +395,67 @@ func TestCircuitBreaker_Execute(t *testing.T) {
 	}
 }
 
+// TestCircuitBreaker_RecoversThroughExecute verifies that a breaker created with
+// DefaultCircuitBreakerConfig (SuccessThreshold:2, HalfOpenMaxRequests:1) can fully
+// recover to Closed when driven exclusively through Execute() — the production path.
+//
+// This is a regression test for a bug where, after the first half-open probe, the
+// in-flight slot was never released: halfOpenRequests stayed at its max so Allow()
+// returned false forever and Record() was never called again, stranding the breaker
+// in half-open. The test never calls Record() after a false Allow(); it relies solely
+// on Execute() to admit and complete each probe.
+func TestCircuitBreaker_RecoversThroughExecute(t *testing.T) {
+	// Start from the shipped defaults (the values that trigger the bug) and only
+	// shorten the timeout so the test does not wait the full 30s recovery window.
+	config := DefaultCircuitBreakerConfig()
+	config.Timeout = 20 * time.Millisecond
+
+	cb := NewCircuitBreaker(config)
+
+	// Drive the breaker open with FailureThreshold consecutive failures.
+	failing := func() error { return errors.New("service unavailable") }
+	for i := 0; i < config.FailureThreshold; i++ {
+		_ = cb.Execute(failing)
+	}
+	if cb.State() != CircuitOpen {
+		t.Fatalf("after %d failures: state = %v, want Open", config.FailureThreshold, cb.State())
+	}
+
+	// While open, Execute must fail fast without invoking the function.
+	called := false
+	if err := cb.Execute(func() error { called = true; return nil }); err != ErrCircuitOpen {
+		t.Fatalf("Execute() while open = %v, want ErrCircuitOpen", err)
+	}
+	if called {
+		t.Fatal("function was invoked while circuit was open")
+	}
+
+	// Wait out the open timeout so the breaker is eligible for half-open probing.
+	time.Sleep(2 * config.Timeout)
+
+	// Recovery loop: drive healthy requests through Execute ONLY. We never call
+	// Record() ourselves, and we never call Record() after a blocked Allow() — each
+	// probe is admitted and completed by Execute(). With the fix, completed probes
+	// release their in-flight slot so the next probe is admitted until the breaker
+	// accumulates SuccessThreshold successes and closes.
+	healthy := func() error { return nil }
+	deadline := time.Now().Add(2 * time.Second)
+	for cb.State() != CircuitClosed && time.Now().Before(deadline) {
+		if err := cb.Execute(healthy); err != nil && err != ErrCircuitOpen {
+			t.Fatalf("Execute(healthy) returned unexpected error: %v", err)
+		}
+	}
+
+	if cb.State() != CircuitClosed {
+		t.Fatalf("breaker did not recover: state = %v, want Closed", cb.State())
+	}
+
+	// Once closed, requests must flow again.
+	if err := cb.Execute(healthy); err != nil {
+		t.Fatalf("Execute(healthy) after recovery = %v, want nil", err)
+	}
+}
+
 // TestCircuitBreaker_Reset tests the Reset method.
 func TestCircuitBreaker_Reset(t *testing.T) {
 	cb := NewCircuitBreaker(CircuitBreakerConfig{
@@ -292,6 +480,75 @@ func TestCircuitBreaker_Reset(t *testing.T) {
 	}
 	if cb.ConsecutiveErrors() != 0 {
 		t.Errorf("ConsecutiveErrors() = %d, expected 0", cb.ConsecutiveErrors())
+	}
+}
+
+// captureLogger is a Logger that records formatted messages for assertions.
+type captureLogger struct {
+	mu   sync.Mutex
+	msgs []string
+}
+
+func (l *captureLogger) Printf(format string, v ...any) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.msgs = append(l.msgs, fmt.Sprintf(format, v...))
+}
+
+func (l *captureLogger) count() int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return len(l.msgs)
+}
+
+// TestCircuitBreaker_PanickingCallbackDoesNotCrash verifies that an
+// OnStateChange callback that panics does not crash the breaker, that state
+// transitions still occur, and that the panic is routed to the configured
+// Logger. The callback must not run under the breaker lock, so even though it
+// blocks/panics, breaker methods remain usable (no deadlock).
+func TestCircuitBreaker_PanickingCallbackDoesNotCrash(t *testing.T) {
+	logger := &captureLogger{}
+	var calls atomic.Int32
+
+	cb := NewCircuitBreaker(CircuitBreakerConfig{
+		FailureThreshold: 2,
+		Timeout:          50 * time.Millisecond,
+		Logger:           logger,
+		OnStateChange: func(from, to CircuitState) {
+			calls.Add(1)
+			panic("boom in user callback")
+		},
+	})
+
+	// Drive the breaker open; this triggers the panicking callback.
+	cb.Record(errors.New("error 1"))
+	cb.Record(errors.New("error 2"))
+
+	// The transition must have occurred despite the panicking callback.
+	if cb.State() != CircuitOpen {
+		t.Fatalf("State after 2 failures = %v, expected %v", cb.State(), CircuitOpen)
+	}
+
+	// The breaker is not deadlocked: lock-taking methods still respond.
+	if cb.Allow() {
+		t.Error("Allow() returned true for open circuit")
+	}
+
+	// Wait for the detached callback goroutine to run and recover.
+	deadline := time.Now().Add(time.Second)
+	for calls.Load() == 0 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if calls.Load() == 0 {
+		t.Fatal("OnStateChange callback was never invoked")
+	}
+
+	// The recovered panic must have been routed to the logger.
+	for logger.count() == 0 && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+	}
+	if logger.count() == 0 {
+		t.Error("expected recovered panic to be reported via Logger")
 	}
 }
 

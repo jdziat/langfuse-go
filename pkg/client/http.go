@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -42,6 +43,7 @@ type httpClient struct {
 	debug          bool
 	circuitBreaker *pkghttp.CircuitBreaker
 	hook           HTTPHook
+	userAgent      string
 }
 
 // newHTTPClient creates a new HTTP client.
@@ -60,6 +62,16 @@ func newHTTPClient(cfg *Config) *httpClient {
 		}
 	}
 
+	// Resolve the SDK version for the User-Agent. Prefer the version injected
+	// via Config (set by the root langfuse package) and fall back to the
+	// package-level Version variable when unset. Both ultimately derive from
+	// the single source of truth in internal/version, so direct pkg/client
+	// users report the real released version without any injection.
+	ver := cfg.Version
+	if ver == "" {
+		ver = Version
+	}
+
 	h := &httpClient{
 		client:        cfg.HTTPClient,
 		baseURL:       strings.TrimSuffix(cfg.BaseURL, "/"),
@@ -69,15 +81,45 @@ func newHTTPClient(cfg *Config) *httpClient {
 		retryDelay:    cfg.RetryDelay,
 		retryStrategy: retryStrategy,
 		debug:         cfg.Debug,
-		hook:          combineHooks(cfg.HTTPHooks),
+		hook:          buildRequestHook(cfg),
+		userAgent:     "langfuse-go/" + ver,
 	}
 
 	// Initialize circuit breaker if configured
 	if cfg.CircuitBreaker != nil {
-		h.circuitBreaker = pkghttp.NewCircuitBreaker(*cfg.CircuitBreaker)
+		cbCfg := *cfg.CircuitBreaker
+		// Default the failure classifier so the breaker only trips on errors that
+		// indicate the service (not the request) is unhealthy. Without this every
+		// 4xx — including 401/403/404/422, which signal client-side problems — would
+		// count toward the failure threshold and open the circuit. A user-supplied
+		// IsFailure always wins.
+		if cbCfg.IsFailure == nil {
+			cbCfg.IsFailure = isCircuitFailure
+		}
+		h.circuitBreaker = pkghttp.NewCircuitBreaker(cbCfg)
 	}
 
 	return h
+}
+
+// isCircuitFailure reports whether an error returned from doWithRetries should
+// count as a circuit-breaker failure. Only retryable conditions — network/transport
+// errors and retryable API responses (429 and 5xx) — indicate an unhealthy service
+// and trip the breaker. Non-retryable 4xx responses (401/403/404/422) are treated
+// as healthy server behavior so they never open the circuit.
+func isCircuitFailure(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	var apiErr *pkgerrors.APIError
+	if errors.As(err, &apiErr) {
+		return apiErr.IsRetryable()
+	}
+
+	// Non-API errors are transport/network failures (e.g. dial timeouts,
+	// connection resets) or context cancellation; treat them as service failures.
+	return true
 }
 
 // request represents an HTTP request to be made.
@@ -168,7 +210,7 @@ func (h *httpClient) doOnce(ctx context.Context, req *request) error {
 	httpReq.Header.Set("Authorization", h.authHeader)
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Accept", "application/json")
-	httpReq.Header.Set("User-Agent", "langfuse-go/"+Version)
+	httpReq.Header.Set("User-Agent", h.userAgent)
 	httpReq.Header.Set("X-Request-ID", requestID)
 
 	// Check if context has a request ID override
@@ -338,6 +380,31 @@ func combineHooks(hooks []HTTPHook) HTTPHook {
 		return hooks[0]
 	}
 	return &combinedHook{hooks: hooks}
+}
+
+// buildRequestHook assembles the HTTPHook installed on the client from both the
+// plain HTTPHooks and the priority-aware ClassifiedHooks on the config.
+//
+// Plain HTTPHooks run first, then the classified hooks run through a
+// ClassifiedHookChain so that observational classified hooks log-and-continue on
+// failure while critical classified hooks abort the request. Either set may be
+// empty; if both are empty the result is nil (no hook installed).
+func buildRequestHook(cfg *Config) HTTPHook {
+	plain := combineHooks(cfg.HTTPHooks)
+
+	if len(cfg.ClassifiedHooks) == 0 {
+		return plain
+	}
+
+	chain := pkghttp.NewClassifiedHookChain(cfg.Logger, cfg.Metrics)
+	for _, ch := range cfg.ClassifiedHooks {
+		chain.AddClassified(ch)
+	}
+
+	if plain == nil {
+		return chain
+	}
+	return &combinedHook{hooks: []HTTPHook{plain, chain}}
 }
 
 // combinedHook combines multiple hooks into one.

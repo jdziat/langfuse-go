@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        go-version: ['1.25.9']
+        go-version: ['1.25.11']
 
     steps:
       - name: Checkout code
@@ -49,9 +49,23 @@ jobs:
       - name: Run tests
         run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
 
+      - name: Enforce pkg/client coverage floor
+        # Critical-path package (batching, async error handling, queue overflow,
+        # shutdown). Measured cross-package so coverage driven from ./tests counts.
+        # Floor is set well below current coverage to avoid flakiness; raise it
+        # deliberately, never let it silently regress.
+        run: |
+          go test -covermode=atomic \
+            -coverpkg=./pkg/client/... \
+            -coverprofile=client_coverage.out \
+            ./pkg/client/ ./tests/
+          pct=$(go tool cover -func=client_coverage.out | awk '/^total:/ {sub(/%/,"",$3); print $3}')
+          echo "pkg/client coverage: ${pct}%"
+          awk -v p="$pct" -v floor=60 'BEGIN { if (p+0 < floor) { printf "FAIL: pkg/client coverage %.1f%% is below floor %d%%\n", p, floor; exit 1 } printf "OK: pkg/client coverage %.1f%% meets floor %d%%\n", p, floor }'
+
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v6
-        if: matrix.go-version == '1.25.9'
+        if: matrix.go-version == '1.25.11'
         with:
           file: ./coverage.out
           flags: unittests
@@ -68,7 +82,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.25.9'
+          go-version: '1.25.11'
 
       - name: Run go vet
         run: go vet ./...
@@ -99,7 +113,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.25.9'
+          go-version: '1.25.11'
 
       - name: Build
         run: go build -v ./...
@@ -108,6 +122,22 @@ jobs:
         run: |
           go build -v ./examples/basic
           go build -v ./examples/advanced
+
+  doc-snippets:
+    name: Doc Snippets
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.25.11'
+
+      - name: Check documentation code snippets compile
+        run: bash scripts/check-doc-snippets.sh
 
   security:
     name: Security
@@ -120,7 +150,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.25.9'
+          go-version: '1.25.11'
 
       - name: Install govulncheck
         run: go install golang.org/x/vuln/cmd/govulncheck@latest

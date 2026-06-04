@@ -12,11 +12,20 @@
 //
 // Example:
 //
-//	import "github.com/jdziat/langfuse-go/pkg/client"
+//	package main
 //
-//	c, err := client.New("pk-lf-xxx", "sk-lf-xxx")
-//	if err != nil {
-//	    log.Fatal(err)
+//	import (
+//	    "context"
+//	    "log"
+//
+//	    "github.com/jdziat/langfuse-go/pkg/client"
+//	)
+//
+//	func main() {
+//	    c, err := client.New("pk-lf-xxx", "sk-lf-xxx")
+//	    if err != nil {
+//	        log.Fatal(err)
+//	    }
+//	    defer c.Shutdown(context.Background())
 //	}
-//	defer c.Shutdown(context.Background())
 package client
