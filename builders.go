@@ -1002,6 +1002,33 @@ func DefaultStrictValidationConfig() StrictValidationConfig {
 	}
 }
 
+// strictValidationActive reports whether the client has strict validation
+// enabled in its configuration. It is safe to call with a nil client or a
+// client without strict validation configured (both return false), so the
+// standard builders keep their default-off behaviour.
+func strictValidationActive(c *Client) bool {
+	if c == nil || c.rootConfig == nil {
+		return false
+	}
+	cfg := c.rootConfig.StrictValidation
+	return cfg != nil && cfg.Enabled
+}
+
+// reduceStrictErrors collapses accumulated strict-validation errors into a
+// single error, honouring the configured FailFast behaviour. When FailFast is
+// set the first error is returned on its own; otherwise all errors are combined
+// via combineValidationErrors (the same combiner the Validated* builders use).
+// It returns nil when there are no errors.
+func reduceStrictErrors(c *Client, errs []error) error {
+	if len(errs) == 0 {
+		return nil
+	}
+	if cfg := c.rootConfig.StrictValidation; cfg != nil && cfg.FailFast {
+		return errs[0]
+	}
+	return combineValidationErrors(errs)
+}
+
 // ============================================================================
 // Trace Builders (from trace.go)
 // ============================================================================
@@ -1242,10 +1269,29 @@ func (b *TraceBuilder) Validate() error {
 	return nil
 }
 
+// strictValidate runs the same field-level validation as ValidatedTraceBuilder
+// against this builder's current state and returns any combined error. It
+// replays the accumulated values through a throwaway ValidatedTraceBuilder so
+// the validation rules live in exactly one place (the Validated* hierarchy).
+func (b *TraceBuilder) strictValidate() error {
+	v := NewValidatedTraceBuilder(b.client).
+		ID(b.trace.ID).
+		Name(b.trace.Name).
+		Metadata(b.trace.Metadata).
+		Tags(b.trace.Tags)
+	return reduceStrictErrors(b.client, v.Errors())
+}
+
 // Create creates the trace and returns a TraceContext for adding observations.
 func (b *TraceBuilder) Create(ctx context.Context) (*TraceContext, error) {
 	if err := b.Validate(); err != nil {
 		return nil, err
+	}
+
+	if strictValidationActive(b.client) {
+		if err := b.strictValidate(); err != nil {
+			return nil, err
+		}
 	}
 
 	event := ingestionEvent{
@@ -1647,10 +1693,29 @@ func (b *SpanBuilder) Validate() error {
 	return nil
 }
 
+// strictValidate runs the same field-level validation as ValidatedSpanBuilder
+// against this builder's current state and returns any combined error. It
+// replays the accumulated values through a throwaway ValidatedSpanBuilder so
+// the validation rules live in exactly one place (the Validated* hierarchy).
+func (b *SpanBuilder) strictValidate() error {
+	v := NewValidatedSpanBuilder(b.ctx).
+		ID(b.span.ID).
+		Name(b.span.Name).
+		Metadata(b.span.Metadata).
+		Level(b.span.Level)
+	return reduceStrictErrors(b.ctx.client, v.Errors())
+}
+
 // Create creates the span and returns a SpanContext.
 func (b *SpanBuilder) Create(ctx context.Context) (*SpanContext, error) {
 	if err := b.Validate(); err != nil {
 		return nil, err
+	}
+
+	if strictValidationActive(b.ctx.client) {
+		if err := b.strictValidate(); err != nil {
+			return nil, err
+		}
 	}
 
 	event := ingestionEvent{
@@ -2230,10 +2295,31 @@ func (b *GenerationBuilder) Validate() error {
 	return nil
 }
 
+// strictValidate runs the same field-level validation as
+// ValidatedGenerationBuilder against this builder's current state and returns
+// any combined error. It replays the accumulated values through a throwaway
+// ValidatedGenerationBuilder so the validation rules live in exactly one place
+// (the Validated* hierarchy).
+func (b *GenerationBuilder) strictValidate() error {
+	v := NewValidatedGenerationBuilder(b.ctx).
+		ID(b.gen.ID).
+		Name(b.gen.Name).
+		Metadata(b.gen.Metadata).
+		Level(b.gen.Level).
+		UsageDetails(b.gen.Usage)
+	return reduceStrictErrors(b.ctx.client, v.Errors())
+}
+
 // Create creates the generation and returns a GenerationContext.
 func (b *GenerationBuilder) Create(ctx context.Context) (*GenerationContext, error) {
 	if err := b.Validate(); err != nil {
 		return nil, err
+	}
+
+	if strictValidationActive(b.ctx.client) {
+		if err := b.strictValidate(); err != nil {
+			return nil, err
+		}
 	}
 
 	event := ingestionEvent{
