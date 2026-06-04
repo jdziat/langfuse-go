@@ -52,9 +52,28 @@
 //	    log.Printf("failed to end generation: %v", err)
 //	}
 //
-// For a one-line convenience over the fluent builder, [Client.Trace] creates a
-// trace from a context, a name, and [TraceOption] functions. The fluent
-// builders shown above are the canonical path; prefer them for new code.
+// # Canonical API vs. Convenience Wrappers
+//
+// There is one blessed way to instrument code: the fluent, context-threaded
+// builders (client.NewTrace()...Create(ctx), trace.NewSpan()...Create(ctx),
+// trace.NewGeneration()...Create(ctx), and so on). New code should use them.
+//
+// Everything else in this package is a convenience layer that sits on top of
+// those builders and exists only to save a few keystrokes. None of it adds
+// behavior the builders lack:
+//
+//   - The Simple API — [Client.Trace], [TraceContext.Span],
+//     [TraceContext.Generation], [TraceContext.Event], the [TraceContext.Score]
+//     family, and their counterparts on [SpanContext] and [GenerationContext] —
+//     takes a name plus variadic WithXxx options and forwards them to the
+//     matching builder.
+//   - The tracing helpers — [TraceGeneration], [TraceSpan], [TraceFunc], and
+//     [WithGeneration] — wrap a builder call around a function you supply to
+//     handle timing and error recording for you.
+//
+// These wrappers are fully supported and behave identically to the builder
+// calls they delegate to, but they are strictly secondary. When in doubt, reach
+// for the fluent builders.
 //
 // # Configuration
 //

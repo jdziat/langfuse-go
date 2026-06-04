@@ -542,29 +542,19 @@ func WithConfigID(configID string) ScoreOption {
 }
 
 // ============================================================================
-// Simple API on Client
+// Shared apply helpers
+//
+// The Simple API resolves each WithXxx option into a *Config struct and then
+// applies it to the corresponding fluent builder. Every Span/Generation/Event/
+// Score entry point (on Client, TraceContext, SpanContext, and GenerationContext)
+// shares the same apply logic, so it lives in one place here. The per-context
+// methods are thin wrappers that pick the right builder constructor and delegate
+// to these helpers. This keeps the Simple API a strict convenience layer over the
+// canonical fluent builders with a single internal apply path.
 // ============================================================================
 
-// Trace creates a new trace with the given name.
-// This is the Simple API for creating traces.
-//
-// Example:
-//
-//	trace, err := client.Trace(ctx, "user-request",
-//	    langfuse.WithUserID("user-123"),
-//	    langfuse.WithTags("api", "v2"))
-//	if err != nil {
-//	    return err
-//	}
-//	defer client.Flush(ctx)
-func (c *Client) Trace(ctx context.Context, name string, opts ...TraceOption) (*TraceContext, error) {
-	cfg := &traceConfig{}
-	for _, opt := range opts {
-		opt(cfg)
-	}
-
-	builder := c.NewTrace().Name(name)
-
+// applyTraceConfig copies a resolved traceConfig onto a TraceBuilder.
+func applyTraceConfig(builder *TraceBuilder, cfg *traceConfig) {
 	if cfg.id != "" {
 		builder.ID(cfg.id)
 	}
@@ -598,33 +588,10 @@ func (c *Client) Trace(ctx context.Context, name string, opts ...TraceOption) (*
 	if cfg.environment != "" {
 		builder.Environment(cfg.environment)
 	}
-
-	return builder.Create(ctx)
 }
 
-// ============================================================================
-// Simple API on TraceContext
-// ============================================================================
-
-// Span creates a new span with the given name (Simple API).
-// For the Advanced API builder, use NewSpan().
-//
-// Example:
-//
-//	span, err := trace.Span(ctx, "preprocessing",
-//	    langfuse.WithSpanInput(data))
-//	if err != nil {
-//	    return err
-//	}
-//	defer span.End(ctx)
-func (t *TraceContext) Span(ctx context.Context, name string, opts ...SpanOption) (*SpanContext, error) {
-	cfg := &spanConfig{}
-	for _, opt := range opts {
-		opt.applySpan(cfg)
-	}
-
-	builder := t.NewSpan().Name(name)
-
+// applySpanConfig copies a resolved spanConfig onto a SpanBuilder.
+func applySpanConfig(builder *SpanBuilder, cfg *spanConfig) {
 	if cfg.id != "" {
 		builder.ID(cfg.id)
 	}
@@ -655,28 +622,10 @@ func (t *TraceContext) Span(ctx context.Context, name string, opts ...SpanOption
 	if cfg.hasEndTime {
 		builder.EndTime(cfg.endTime)
 	}
-
-	return builder.Create(ctx)
 }
 
-// Generation creates a new generation with the given name (Simple API).
-// For the Advanced API builder, use NewGeneration().
-//
-// Example:
-//
-//	gen, err := trace.Generation(ctx, "gpt-4-call",
-//	    langfuse.WithModel("gpt-4"),
-//	    langfuse.WithGenerationInput(messages),
-//	    langfuse.WithGenerationOutput(response),
-//	    langfuse.WithTokenUsage(100, 50))
-func (t *TraceContext) Generation(ctx context.Context, name string, opts ...GenerationOption) (*GenerationContext, error) {
-	cfg := &generationConfig{}
-	for _, opt := range opts {
-		opt.applyGeneration(cfg)
-	}
-
-	builder := t.NewGeneration().Name(name)
-
+// applyGenerationConfig copies a resolved generationConfig onto a GenerationBuilder.
+func applyGenerationConfig(builder *GenerationBuilder, cfg *generationConfig) {
 	if cfg.id != "" {
 		builder.ID(cfg.id)
 	}
@@ -725,25 +674,10 @@ func (t *TraceContext) Generation(ctx context.Context, name string, opts ...Gene
 	if cfg.hasCompletionStart {
 		builder.CompletionStartTime(cfg.completionStartTime)
 	}
-
-	return builder.Create(ctx)
 }
 
-// Event creates a new event with the given name (Simple API).
-// For the Advanced API builder, use NewEvent().
-//
-// Example:
-//
-//	err := trace.Event(ctx, "cache-hit",
-//	    langfuse.WithEventMetadata(langfuse.M{"key": cacheKey}))
-func (t *TraceContext) Event(ctx context.Context, name string, opts ...EventOption) error {
-	cfg := &eventConfig{}
-	for _, opt := range opts {
-		opt.applyEvent(cfg)
-	}
-
-	builder := t.NewEvent().Name(name)
-
+// applyEventConfig copies a resolved eventConfig onto an EventBuilder.
+func applyEventConfig(builder *EventBuilder, cfg *eventConfig) {
 	if cfg.id != "" {
 		builder.ID(cfg.id)
 	}
@@ -771,6 +705,127 @@ func (t *TraceContext) Event(ctx context.Context, name string, opts ...EventOpti
 	if cfg.hasStartTime {
 		builder.StartTime(cfg.startTime)
 	}
+}
+
+// applyScoreOpts resolves ScoreOptions and applies the shared id/comment fields to
+// a ScoreBuilder. The caller selects the value type (numeric/boolean/categorical)
+// before calling this. It returns the resolved scoreConfig in case the caller needs
+// other fields.
+func applyScoreOpts(builder *ScoreBuilder, opts ...ScoreOption) *scoreConfig {
+	cfg := &scoreConfig{}
+	for _, opt := range opts {
+		opt(cfg)
+	}
+	if cfg.id != "" {
+		builder.ID(cfg.id)
+	}
+	if cfg.comment != "" {
+		builder.Comment(cfg.comment)
+	}
+	return cfg
+}
+
+// ============================================================================
+// Simple API on Client
+// ============================================================================
+
+// Trace creates a new trace with the given name.
+//
+// Trace is a convenience wrapper over the canonical fluent builder
+// ([Client.NewTrace]); it resolves the [TraceOption] functions and delegates to
+// the builder. For new code, prefer the fluent builders directly.
+//
+// Example:
+//
+//	trace, err := client.Trace(ctx, "user-request",
+//	    langfuse.WithUserID("user-123"),
+//	    langfuse.WithTags("api", "v2"))
+//	if err != nil {
+//	    return err
+//	}
+//	defer client.Flush(ctx)
+func (c *Client) Trace(ctx context.Context, name string, opts ...TraceOption) (*TraceContext, error) {
+	cfg := &traceConfig{}
+	for _, opt := range opts {
+		opt(cfg)
+	}
+
+	builder := c.NewTrace().Name(name)
+	applyTraceConfig(builder, cfg)
+
+	return builder.Create(ctx)
+}
+
+// ============================================================================
+// Simple API on TraceContext
+// ============================================================================
+
+// Span creates a new span with the given name (Simple API).
+//
+// This is a convenience wrapper over the canonical fluent builder
+// ([TraceContext.NewSpan]); prefer the builder for new code.
+//
+// Example:
+//
+//	span, err := trace.Span(ctx, "preprocessing",
+//	    langfuse.WithSpanInput(data))
+//	if err != nil {
+//	    return err
+//	}
+//	defer span.End(ctx)
+func (t *TraceContext) Span(ctx context.Context, name string, opts ...SpanOption) (*SpanContext, error) {
+	cfg := &spanConfig{}
+	for _, opt := range opts {
+		opt.applySpan(cfg)
+	}
+
+	builder := t.NewSpan().Name(name)
+	applySpanConfig(builder, cfg)
+
+	return builder.Create(ctx)
+}
+
+// Generation creates a new generation with the given name (Simple API).
+//
+// This is a convenience wrapper over the canonical fluent builder
+// ([TraceContext.NewGeneration]); prefer the builder for new code.
+//
+// Example:
+//
+//	gen, err := trace.Generation(ctx, "gpt-4-call",
+//	    langfuse.WithModel("gpt-4"),
+//	    langfuse.WithGenerationInput(messages),
+//	    langfuse.WithGenerationOutput(response),
+//	    langfuse.WithTokenUsage(100, 50))
+func (t *TraceContext) Generation(ctx context.Context, name string, opts ...GenerationOption) (*GenerationContext, error) {
+	cfg := &generationConfig{}
+	for _, opt := range opts {
+		opt.applyGeneration(cfg)
+	}
+
+	builder := t.NewGeneration().Name(name)
+	applyGenerationConfig(builder, cfg)
+
+	return builder.Create(ctx)
+}
+
+// Event creates a new event with the given name (Simple API).
+//
+// This is a convenience wrapper over the canonical fluent builder
+// ([TraceContext.NewEvent]); prefer the builder for new code.
+//
+// Example:
+//
+//	err := trace.Event(ctx, "cache-hit",
+//	    langfuse.WithEventMetadata(langfuse.M{"key": cacheKey}))
+func (t *TraceContext) Event(ctx context.Context, name string, opts ...EventOption) error {
+	cfg := &eventConfig{}
+	for _, opt := range opts {
+		opt.applyEvent(cfg)
+	}
+
+	builder := t.NewEvent().Name(name)
+	applyEventConfig(builder, cfg)
 
 	return builder.Create(ctx)
 }
@@ -803,71 +858,44 @@ func (t *TraceContext) Complete(ctx context.Context) error {
 
 // Score adds a numeric score to this trace (Simple API).
 //
+// This is a convenience wrapper over the canonical fluent builder
+// ([TraceContext.NewScore]); prefer the builder for new code.
+//
 // Example:
 //
 //	err := trace.Score(ctx, "quality", 0.95,
 //	    langfuse.WithComment("excellent response"))
 func (t *TraceContext) Score(ctx context.Context, name string, value float64, opts ...ScoreOption) error {
-	cfg := &scoreConfig{}
-	for _, opt := range opts {
-		opt(cfg)
-	}
-
 	builder := t.NewScore().Name(name).NumericValue(value)
-
-	if cfg.id != "" {
-		builder.ID(cfg.id)
-	}
-	if cfg.comment != "" {
-		builder.Comment(cfg.comment)
-	}
-
+	applyScoreOpts(builder, opts...)
 	return builder.Create(ctx)
 }
 
 // ScoreBool adds a boolean score to this trace (Simple API).
 //
+// This is a convenience wrapper over the canonical fluent builder
+// ([TraceContext.NewScore]); prefer the builder for new code.
+//
 // Example:
 //
 //	err := trace.ScoreBool(ctx, "passed", true)
 func (t *TraceContext) ScoreBool(ctx context.Context, name string, value bool, opts ...ScoreOption) error {
-	cfg := &scoreConfig{}
-	for _, opt := range opts {
-		opt(cfg)
-	}
-
 	builder := t.NewScore().Name(name).BooleanValue(value)
-
-	if cfg.id != "" {
-		builder.ID(cfg.id)
-	}
-	if cfg.comment != "" {
-		builder.Comment(cfg.comment)
-	}
-
+	applyScoreOpts(builder, opts...)
 	return builder.Create(ctx)
 }
 
 // ScoreCategory adds a categorical score to this trace (Simple API).
 //
+// This is a convenience wrapper over the canonical fluent builder
+// ([TraceContext.NewScore]); prefer the builder for new code.
+//
 // Example:
 //
 //	err := trace.ScoreCategory(ctx, "rating", "excellent")
 func (t *TraceContext) ScoreCategory(ctx context.Context, name string, value string, opts ...ScoreOption) error {
-	cfg := &scoreConfig{}
-	for _, opt := range opts {
-		opt(cfg)
-	}
-
 	builder := t.NewScore().Name(name).CategoricalValue(value)
-
-	if cfg.id != "" {
-		builder.ID(cfg.id)
-	}
-	if cfg.comment != "" {
-		builder.Comment(cfg.comment)
-	}
-
+	applyScoreOpts(builder, opts...)
 	return builder.Create(ctx)
 }
 
@@ -876,7 +904,9 @@ func (t *TraceContext) ScoreCategory(ctx context.Context, name string, value str
 // ============================================================================
 
 // Span creates a child span (Simple API).
-// For the Advanced API builder, use NewSpan().
+//
+// This is a convenience wrapper over the canonical fluent builder
+// ([SpanContext.NewSpan]); prefer the builder for new code.
 func (s *SpanContext) Span(ctx context.Context, name string, opts ...SpanOption) (*SpanContext, error) {
 	cfg := &spanConfig{}
 	for _, opt := range opts {
@@ -884,43 +914,15 @@ func (s *SpanContext) Span(ctx context.Context, name string, opts ...SpanOption)
 	}
 
 	builder := s.NewSpan().Name(name)
-
-	if cfg.id != "" {
-		builder.ID(cfg.id)
-	}
-	if cfg.input != nil {
-		builder.Input(cfg.input)
-	}
-	if cfg.output != nil {
-		builder.Output(cfg.output)
-	}
-	if cfg.metadata != nil {
-		builder.Metadata(cfg.metadata)
-	}
-	if cfg.hasLevel {
-		builder.Level(cfg.level)
-	}
-	if cfg.statusMessage != "" {
-		builder.StatusMessage(cfg.statusMessage)
-	}
-	if cfg.version != "" {
-		builder.Version(cfg.version)
-	}
-	if cfg.environment != "" {
-		builder.Environment(cfg.environment)
-	}
-	if cfg.hasStartTime {
-		builder.StartTime(cfg.startTime)
-	}
-	if cfg.hasEndTime {
-		builder.EndTime(cfg.endTime)
-	}
+	applySpanConfig(builder, cfg)
 
 	return builder.Create(ctx)
 }
 
 // Generation creates a child generation (Simple API).
-// For the Advanced API builder, use NewGeneration().
+//
+// This is a convenience wrapper over the canonical fluent builder
+// ([SpanContext.NewGeneration]); prefer the builder for new code.
 func (s *SpanContext) Generation(ctx context.Context, name string, opts ...GenerationOption) (*GenerationContext, error) {
 	cfg := &generationConfig{}
 	for _, opt := range opts {
@@ -928,61 +930,15 @@ func (s *SpanContext) Generation(ctx context.Context, name string, opts ...Gener
 	}
 
 	builder := s.NewGeneration().Name(name)
-
-	if cfg.id != "" {
-		builder.ID(cfg.id)
-	}
-	if cfg.model != "" {
-		builder.Model(cfg.model)
-	}
-	if cfg.modelParameters != nil {
-		builder.ModelParameters(cfg.modelParameters)
-	}
-	if cfg.input != nil {
-		builder.Input(cfg.input)
-	}
-	if cfg.output != nil {
-		builder.Output(cfg.output)
-	}
-	if cfg.metadata != nil {
-		builder.Metadata(cfg.metadata)
-	}
-	if cfg.hasLevel {
-		builder.Level(cfg.level)
-	}
-	if cfg.statusMessage != "" {
-		builder.StatusMessage(cfg.statusMessage)
-	}
-	if cfg.version != "" {
-		builder.Version(cfg.version)
-	}
-	if cfg.environment != "" {
-		builder.Environment(cfg.environment)
-	}
-	if cfg.usage != nil {
-		builder.Usage(cfg.usage)
-	}
-	if cfg.promptName != "" {
-		builder.PromptName(cfg.promptName)
-	}
-	if cfg.hasPromptVersion {
-		builder.PromptVersion(cfg.promptVersion)
-	}
-	if cfg.hasStartTime {
-		builder.StartTime(cfg.startTime)
-	}
-	if cfg.hasEndTime {
-		builder.EndTime(cfg.endTime)
-	}
-	if cfg.hasCompletionStart {
-		builder.CompletionStartTime(cfg.completionStartTime)
-	}
+	applyGenerationConfig(builder, cfg)
 
 	return builder.Create(ctx)
 }
 
 // Event creates a child event (Simple API).
-// For the Advanced API builder, use NewEvent().
+//
+// This is a convenience wrapper over the canonical fluent builder
+// ([SpanContext.NewEvent]); prefer the builder for new code.
 func (s *SpanContext) Event(ctx context.Context, name string, opts ...EventOption) error {
 	cfg := &eventConfig{}
 	for _, opt := range opts {
@@ -990,55 +946,18 @@ func (s *SpanContext) Event(ctx context.Context, name string, opts ...EventOptio
 	}
 
 	builder := s.NewEvent().Name(name)
-
-	if cfg.id != "" {
-		builder.ID(cfg.id)
-	}
-	if cfg.input != nil {
-		builder.Input(cfg.input)
-	}
-	if cfg.output != nil {
-		builder.Output(cfg.output)
-	}
-	if cfg.metadata != nil {
-		builder.Metadata(cfg.metadata)
-	}
-	if cfg.hasLevel {
-		builder.Level(cfg.level)
-	}
-	if cfg.statusMessage != "" {
-		builder.StatusMessage(cfg.statusMessage)
-	}
-	if cfg.version != "" {
-		builder.Version(cfg.version)
-	}
-	if cfg.environment != "" {
-		builder.Environment(cfg.environment)
-	}
-	if cfg.hasStartTime {
-		builder.StartTime(cfg.startTime)
-	}
+	applyEventConfig(builder, cfg)
 
 	return builder.Create(ctx)
 }
 
 // Score adds a numeric score to this span (Simple API).
-// For the Advanced API builder, use NewScore().
+//
+// This is a convenience wrapper over the canonical fluent builder
+// ([SpanContext.NewScore]); prefer the builder for new code.
 func (s *SpanContext) Score(ctx context.Context, name string, value float64, opts ...ScoreOption) error {
-	cfg := &scoreConfig{}
-	for _, opt := range opts {
-		opt(cfg)
-	}
-
 	builder := s.NewScore().Name(name).NumericValue(value)
-
-	if cfg.id != "" {
-		builder.ID(cfg.id)
-	}
-	if cfg.comment != "" {
-		builder.Comment(cfg.comment)
-	}
-
+	applyScoreOpts(builder, opts...)
 	return builder.Create(ctx)
 }
 
@@ -1047,7 +966,9 @@ func (s *SpanContext) Score(ctx context.Context, name string, value float64, opt
 // ============================================================================
 
 // Span creates a child span (Simple API).
-// For the Advanced API builder, use NewSpan().
+//
+// This is a convenience wrapper over the canonical fluent builder
+// ([GenerationContext.NewSpan]); prefer the builder for new code.
 func (g *GenerationContext) Span(ctx context.Context, name string, opts ...SpanOption) (*SpanContext, error) {
 	cfg := &spanConfig{}
 	for _, opt := range opts {
@@ -1055,43 +976,15 @@ func (g *GenerationContext) Span(ctx context.Context, name string, opts ...SpanO
 	}
 
 	builder := g.NewSpan().Name(name)
-
-	if cfg.id != "" {
-		builder.ID(cfg.id)
-	}
-	if cfg.input != nil {
-		builder.Input(cfg.input)
-	}
-	if cfg.output != nil {
-		builder.Output(cfg.output)
-	}
-	if cfg.metadata != nil {
-		builder.Metadata(cfg.metadata)
-	}
-	if cfg.hasLevel {
-		builder.Level(cfg.level)
-	}
-	if cfg.statusMessage != "" {
-		builder.StatusMessage(cfg.statusMessage)
-	}
-	if cfg.version != "" {
-		builder.Version(cfg.version)
-	}
-	if cfg.environment != "" {
-		builder.Environment(cfg.environment)
-	}
-	if cfg.hasStartTime {
-		builder.StartTime(cfg.startTime)
-	}
-	if cfg.hasEndTime {
-		builder.EndTime(cfg.endTime)
-	}
+	applySpanConfig(builder, cfg)
 
 	return builder.Create(ctx)
 }
 
 // Generation creates a child generation (Simple API).
-// For the Advanced API builder, use NewGeneration().
+//
+// This is a convenience wrapper over the canonical fluent builder
+// ([GenerationContext.NewGeneration]); prefer the builder for new code.
 func (g *GenerationContext) Generation(ctx context.Context, name string, opts ...GenerationOption) (*GenerationContext, error) {
 	cfg := &generationConfig{}
 	for _, opt := range opts {
@@ -1099,61 +992,15 @@ func (g *GenerationContext) Generation(ctx context.Context, name string, opts ..
 	}
 
 	builder := g.NewGeneration().Name(name)
-
-	if cfg.id != "" {
-		builder.ID(cfg.id)
-	}
-	if cfg.model != "" {
-		builder.Model(cfg.model)
-	}
-	if cfg.modelParameters != nil {
-		builder.ModelParameters(cfg.modelParameters)
-	}
-	if cfg.input != nil {
-		builder.Input(cfg.input)
-	}
-	if cfg.output != nil {
-		builder.Output(cfg.output)
-	}
-	if cfg.metadata != nil {
-		builder.Metadata(cfg.metadata)
-	}
-	if cfg.hasLevel {
-		builder.Level(cfg.level)
-	}
-	if cfg.statusMessage != "" {
-		builder.StatusMessage(cfg.statusMessage)
-	}
-	if cfg.version != "" {
-		builder.Version(cfg.version)
-	}
-	if cfg.environment != "" {
-		builder.Environment(cfg.environment)
-	}
-	if cfg.usage != nil {
-		builder.Usage(cfg.usage)
-	}
-	if cfg.promptName != "" {
-		builder.PromptName(cfg.promptName)
-	}
-	if cfg.hasPromptVersion {
-		builder.PromptVersion(cfg.promptVersion)
-	}
-	if cfg.hasStartTime {
-		builder.StartTime(cfg.startTime)
-	}
-	if cfg.hasEndTime {
-		builder.EndTime(cfg.endTime)
-	}
-	if cfg.hasCompletionStart {
-		builder.CompletionStartTime(cfg.completionStartTime)
-	}
+	applyGenerationConfig(builder, cfg)
 
 	return builder.Create(ctx)
 }
 
 // Event creates a child event (Simple API).
-// For the Advanced API builder, use NewEvent().
+//
+// This is a convenience wrapper over the canonical fluent builder
+// ([GenerationContext.NewEvent]); prefer the builder for new code.
 func (g *GenerationContext) Event(ctx context.Context, name string, opts ...EventOption) error {
 	cfg := &eventConfig{}
 	for _, opt := range opts {
@@ -1161,55 +1008,18 @@ func (g *GenerationContext) Event(ctx context.Context, name string, opts ...Even
 	}
 
 	builder := g.NewEvent().Name(name)
-
-	if cfg.id != "" {
-		builder.ID(cfg.id)
-	}
-	if cfg.input != nil {
-		builder.Input(cfg.input)
-	}
-	if cfg.output != nil {
-		builder.Output(cfg.output)
-	}
-	if cfg.metadata != nil {
-		builder.Metadata(cfg.metadata)
-	}
-	if cfg.hasLevel {
-		builder.Level(cfg.level)
-	}
-	if cfg.statusMessage != "" {
-		builder.StatusMessage(cfg.statusMessage)
-	}
-	if cfg.version != "" {
-		builder.Version(cfg.version)
-	}
-	if cfg.environment != "" {
-		builder.Environment(cfg.environment)
-	}
-	if cfg.hasStartTime {
-		builder.StartTime(cfg.startTime)
-	}
+	applyEventConfig(builder, cfg)
 
 	return builder.Create(ctx)
 }
 
 // Score adds a numeric score to this generation (Simple API).
-// For the Advanced API builder, use NewScore().
+//
+// This is a convenience wrapper over the canonical fluent builder
+// ([GenerationContext.NewScore]); prefer the builder for new code.
 func (g *GenerationContext) Score(ctx context.Context, name string, value float64, opts ...ScoreOption) error {
-	cfg := &scoreConfig{}
-	for _, opt := range opts {
-		opt(cfg)
-	}
-
 	builder := g.NewScore().Name(name).NumericValue(value)
-
-	if cfg.id != "" {
-		builder.ID(cfg.id)
-	}
-	if cfg.comment != "" {
-		builder.Comment(cfg.comment)
-	}
-
+	applyScoreOpts(builder, opts...)
 	return builder.Create(ctx)
 }
 
@@ -1499,77 +1309,29 @@ var (
 
 // ScoreBool on SpanContext adds a boolean score (implements Scorer interface).
 func (s *SpanContext) ScoreBool(ctx context.Context, name string, value bool, opts ...ScoreOption) error {
-	cfg := &scoreConfig{}
-	for _, opt := range opts {
-		opt(cfg)
-	}
-
 	builder := s.NewScore().Name(name).BooleanValue(value)
-
-	if cfg.id != "" {
-		builder.ID(cfg.id)
-	}
-	if cfg.comment != "" {
-		builder.Comment(cfg.comment)
-	}
-
+	applyScoreOpts(builder, opts...)
 	return builder.Create(ctx)
 }
 
 // ScoreCategory on SpanContext adds a categorical score (implements Scorer interface).
 func (s *SpanContext) ScoreCategory(ctx context.Context, name string, value string, opts ...ScoreOption) error {
-	cfg := &scoreConfig{}
-	for _, opt := range opts {
-		opt(cfg)
-	}
-
 	builder := s.NewScore().Name(name).CategoricalValue(value)
-
-	if cfg.id != "" {
-		builder.ID(cfg.id)
-	}
-	if cfg.comment != "" {
-		builder.Comment(cfg.comment)
-	}
-
+	applyScoreOpts(builder, opts...)
 	return builder.Create(ctx)
 }
 
 // ScoreBool on GenerationContext adds a boolean score (implements Scorer interface).
 func (g *GenerationContext) ScoreBool(ctx context.Context, name string, value bool, opts ...ScoreOption) error {
-	cfg := &scoreConfig{}
-	for _, opt := range opts {
-		opt(cfg)
-	}
-
 	builder := g.NewScore().Name(name).BooleanValue(value)
-
-	if cfg.id != "" {
-		builder.ID(cfg.id)
-	}
-	if cfg.comment != "" {
-		builder.Comment(cfg.comment)
-	}
-
+	applyScoreOpts(builder, opts...)
 	return builder.Create(ctx)
 }
 
 // ScoreCategory on GenerationContext adds a categorical score (implements Scorer interface).
 func (g *GenerationContext) ScoreCategory(ctx context.Context, name string, value string, opts ...ScoreOption) error {
-	cfg := &scoreConfig{}
-	for _, opt := range opts {
-		opt(cfg)
-	}
-
 	builder := g.NewScore().Name(name).CategoricalValue(value)
-
-	if cfg.id != "" {
-		builder.ID(cfg.id)
-	}
-	if cfg.comment != "" {
-		builder.Comment(cfg.comment)
-	}
-
+	applyScoreOpts(builder, opts...)
 	return builder.Create(ctx)
 }
 
