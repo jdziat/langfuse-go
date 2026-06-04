@@ -71,7 +71,7 @@ func main() {
     }
 
     // Add a generation (LLM call) to the trace
-    generation, err := trace.Generation().
+    generation, err := trace.NewGeneration().
         Name("gpt-4-completion").
         Model("gpt-4").
         ModelParameters(map[string]interface{}{
@@ -97,7 +97,7 @@ func main() {
     }
 
     // Add a score to evaluate the generation
-    err = generation.Score().
+    err = generation.NewScore().
         Name("quality").
         NumericValue(0.95).
         Comment("Accurate and concise response").
@@ -136,7 +136,7 @@ meta := langfuse.NewMetadata().
     Set("version", "2.0")
 
 // Create a span for preprocessing
-span, err := trace.Span().
+span, err := trace.NewSpan().
     Name("preprocess-input").
     Input("raw user input").
     Metadata(meta).
@@ -162,7 +162,7 @@ Create parent-child relationships between observations:
 ctx := context.Background()
 
 // Create a parent span
-parentSpan, err := trace.Span().
+parentSpan, err := trace.NewSpan().
     Name("parent-operation").
     Create(ctx)
 if err != nil {
@@ -170,7 +170,7 @@ if err != nil {
 }
 
 // Create a child span under the parent
-childSpan, err := parentSpan.Span().
+childSpan, err := parentSpan.NewSpan().
     Name("child-operation").
     Create(ctx)
 if err != nil {
@@ -194,9 +194,18 @@ client, err := langfuse.New(
     langfuse.WithBatchSize(50),                   // events per batch
     langfuse.WithFlushInterval(5*time.Second),    // auto-flush interval
     langfuse.WithDebug(true),                     // enable debug logging
-    langfuse.WithRelease("v1.0.0"),               // default release version
-    langfuse.WithEnvironment("production"),       // default environment
 )
+```
+
+Release and environment are set per trace via the trace builder rather than on
+the client:
+
+```go
+trace, err := client.NewTrace().
+    Name("chat-completion").
+    Release("v1.0.0").       // release version for this trace
+    Environment("production"). // environment for this trace
+    Create(ctx)
 ```
 
 ### Working with Prompts
@@ -211,12 +220,12 @@ if err != nil {
 }
 
 // Use the prompt in your generation
-generation, err := trace.Generation().
+generation, err := trace.NewGeneration().
     Name("chat-completion").
     Model("gpt-4").
     PromptName(prompt.Name).
     PromptVersion(prompt.Version).
-    Create()
+    Create(ctx)
 ```
 
 ### Datasets and Evaluation
@@ -225,22 +234,23 @@ Work with datasets for testing and evaluation:
 
 ```go
 // Create a dataset
-dataset, err := client.Datasets().Create(ctx, &langfuse.Dataset{
+dataset, err := client.Datasets().Create(ctx, &langfuse.CreateDatasetRequest{
     Name:        "qa-dataset",
     Description: "Question-answering evaluation set",
 })
 
 // Add items to the dataset
-item, err := client.Datasets().CreateItem(ctx, &langfuse.DatasetItem{
+item, err := client.Datasets().CreateItem(ctx, &langfuse.CreateDatasetItemRequest{
     DatasetName:    "qa-dataset",
     Input:          map[string]interface{}{"question": "What is 2+2?"},
     ExpectedOutput: map[string]interface{}{"answer": "4"},
 })
 
-// Create a dataset run for evaluation
-run, err := client.Datasets().CreateRun(ctx, &langfuse.DatasetRun{
-    Name:        "evaluation-run-1",
-    DatasetName: "qa-dataset",
+// Link a trace to a dataset item as part of an evaluation run
+runItem, err := client.Datasets().CreateRunItem(ctx, &langfuse.CreateDatasetRunItemRequest{
+    DatasetItemID: item.ID,
+    RunName:       "evaluation-run-1",
+    TraceID:       trace.ID(),
 })
 ```
 
@@ -458,38 +468,36 @@ Configure sub-clients with default options for repeated operations:
 ### Prompts with Default Options
 
 ```go
-// Create a configured prompts client with default label
+// Create a configured prompts client with a default label
 prompts := client.PromptsWithOptions(
-    langfuse.WithPromptsLabel("production"),
+    langfuse.WithDefaultLabel("production"),
 )
 
 // All operations use the default label
 prompt, err := prompts.Get(ctx, "chat-template", nil)
 ```
 
-### Sessions with Default Pagination
+### Sessions with a Default Timeout
 
 ```go
-// Configure sessions client with pagination defaults
+// Configure sessions client with a default operation timeout
 sessions := client.SessionsWithOptions(
-    langfuse.WithSessionsPage(1),
-    langfuse.WithSessionsLimit(50),
+    langfuse.WithSessionsTimeout(10 * time.Second),
 )
 
-// List sessions using configured pagination
-result, err := sessions.List(ctx)
+// List sessions using the configured timeout
+result, err := sessions.List(ctx, nil)
 ```
 
-### Models with Filters
+### Models with a Default Timeout
 
 ```go
-// Configure models client with filters
+// Configure models client with a default operation timeout
 models := client.ModelsWithOptions(
-    langfuse.WithModelsPage(1),
-    langfuse.WithModelsLimit(100),
+    langfuse.WithModelsTimeout(10 * time.Second),
 )
 
-result, err := models.List(ctx)
+result, err := models.List(ctx, nil)
 ```
 
 ### Available WithOptions Methods

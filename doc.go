@@ -69,25 +69,26 @@
 //	}
 //	defer client.Shutdown(context.Background())
 //
+//	ctx := context.Background()
+//
 //	// Create a trace
 //	trace, err := client.NewTrace().
 //	    Name("my-llm-call").
 //	    UserID("user-123").
-//	    Create()
+//	    Create(ctx)
 //
 //	// Record an LLM generation
-//	gen, err := trace.Generation().
+//	gen, err := trace.NewGeneration().
 //	    Name("openai-completion").
 //	    Model("gpt-4").
 //	    Input("What is Go?").
-//	    Create()
+//	    Create(ctx)
 //
 //	// ... make your LLM call ...
 //
-//	gen.End().
-//	    Output("Go is a programming language...").
-//	    Usage(1500, 100).
-//	    Apply()
+//	if err := gen.EndWithUsage(ctx, "Go is a programming language...", 1500, 100); err != nil {
+//	    log.Printf("failed to end generation: %v", err)
+//	}
 //
 // # Configuration
 //
@@ -170,13 +171,13 @@
 //
 // # Queue Behavior
 //
-// The internal queue has a fixed capacity (configurable via [WithQueueSize]).
+// The internal queue has a fixed capacity (configurable via [WithBatchQueueSize]).
 // When the queue is full, new events may be dropped. Monitor for dropped events
 // by checking the error returned from trace/span/generation creation methods.
 //
 // For high-throughput applications:
 //
-//   - Increase queue size with [WithQueueSize]
+//   - Increase queue size with [WithBatchQueueSize]
 //   - Increase batch size with [WithBatchSize]
 //   - Consider calling [Client.Flush] at natural breakpoints (e.g., request completion)
 //
@@ -189,9 +190,6 @@
 //
 //   - [github.com/jdziat/langfuse-go/langfusetest]: Test utilities including mock
 //     servers and test clients for unit testing code that uses Langfuse.
-//
-//   - [github.com/jdziat/langfuse-go/otel]: OpenTelemetry bridge for integrating
-//     Langfuse with existing OpenTelemetry instrumentation.
 //
 // # Examples
 //
