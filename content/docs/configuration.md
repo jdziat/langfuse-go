@@ -17,39 +17,47 @@ There are three ways to configure the SDK:
 
 ### API Keys
 
-The most common configuration is setting your API keys:
+The public and secret keys are required arguments to `New`. They are passed
+positionally, not as options:
+
+```go
+client, err := langfuse.New("pk-lf-...", "sk-lf-...")
+```
+
+Or read them from environment variables and pass them along:
+
+```bash
+export LANGFUSE_PUBLIC_KEY="pk-lf-..."
+export LANGFUSE_SECRET_KEY="sk-lf-..."
+```
 
 ```go
 client, err := langfuse.New(
-    langfuse.WithPublicKey("pk_lf_..."),
-    langfuse.WithSecretKey("sk_lf_..."),
+    os.Getenv("LANGFUSE_PUBLIC_KEY"),
+    os.Getenv("LANGFUSE_SECRET_KEY"),
 )
 ```
 
-Or via environment variables:
-
-```bash
-export LANGFUSE_PUBLIC_KEY="pk_lf_..."
-export LANGFUSE_SECRET_KEY="sk_lf_..."
-```
+All additional configuration is supplied as `ConfigOption` values after the two
+keys.
 
 ## Region Configuration
 
 Langfuse supports multiple deployment regions.
 
-### Cloud US (Default)
+### Cloud EU (Default)
 
 ```go
-client, err := langfuse.New(
-    langfuse.WithRegion(langfuse.RegionUS),
+client, err := langfuse.New("pk-lf-...", "sk-lf-...",
+    langfuse.WithRegion(langfuse.RegionEU),
 )
 ```
 
-### Cloud EU
+### Cloud US
 
 ```go
-client, err := langfuse.New(
-    langfuse.WithRegion(langfuse.RegionEU),
+client, err := langfuse.New("pk-lf-...", "sk-lf-...",
+    langfuse.WithRegion(langfuse.RegionUS),
 )
 ```
 
@@ -58,7 +66,7 @@ client, err := langfuse.New(
 For self-hosted deployments, use a custom base URL:
 
 ```go
-client, err := langfuse.New(
+client, err := langfuse.New("pk-lf-...", "sk-lf-...",
     langfuse.WithBaseURL("https://langfuse.yourcompany.com"),
 )
 ```
@@ -74,10 +82,10 @@ export LANGFUSE_BASE_URL="https://langfuse.yourcompany.com"
 The SDK batches events for efficient network usage. Customize batching behavior:
 
 ```go
-client, err := langfuse.New(
-    langfuse.WithBatchSize(50),           // Max events per batch (default: 100)
-    langfuse.WithFlushInterval(5*time.Second), // Flush interval (default: 10s)
-    langfuse.WithMaxRetries(5),           // Max retry attempts (default: 3)
+client, err := langfuse.New("pk-lf-...", "sk-lf-...",
+    langfuse.WithBatchSize(50),                 // Max events per batch (default: 100)
+    langfuse.WithFlushInterval(5*time.Second),  // Flush interval (default: 10s)
+    langfuse.WithMaxRetries(5),                 // Max retry attempts (default: 3)
 )
 ```
 
@@ -105,11 +113,13 @@ How often to send batched events:
 langfuse.WithFlushInterval(5 * time.Second)
 ```
 
-### Environment Variables
+### Queue Size
 
-```bash
-export LANGFUSE_BATCH_SIZE=50
-export LANGFUSE_FLUSH_INTERVAL=5s
+The internal event queue has a fixed capacity. Increase it for high-throughput
+workloads:
+
+```go
+langfuse.WithBatchQueueSize(2000)
 ```
 
 ## Timeout Configuration
@@ -119,8 +129,8 @@ export LANGFUSE_FLUSH_INTERVAL=5s
 Set the timeout for HTTP requests:
 
 ```go
-client, err := langfuse.New(
-    langfuse.WithTimeout(30 * time.Second), // Default: 10s
+client, err := langfuse.New("pk-lf-...", "sk-lf-...",
+    langfuse.WithTimeout(30*time.Second), // Default: 10s
 )
 ```
 
@@ -140,20 +150,28 @@ client.Shutdown(ctx)
 Configure retry behavior for failed requests:
 
 ```go
-client, err := langfuse.New(
+client, err := langfuse.New("pk-lf-...", "sk-lf-...",
     langfuse.WithMaxRetries(5), // Default: 3
 )
 ```
 
 The SDK uses exponential backoff for retries.
 
+## Debug Logging
+
+Enable verbose logging while developing:
+
+```go
+client, err := langfuse.New("pk-lf-...", "sk-lf-...",
+    langfuse.WithDebug(true),
+)
+```
+
 ## HTTP Client Customization
 
 Use a custom HTTP client for advanced scenarios:
 
 ```go
-import "net/http"
-
 httpClient := &http.Client{
     Timeout: 30 * time.Second,
     Transport: &http.Transport{
@@ -163,7 +181,7 @@ httpClient := &http.Client{
     },
 }
 
-client, err := langfuse.New(
+client, err := langfuse.New("pk-lf-...", "sk-lf-...",
     langfuse.WithHTTPClient(httpClient),
 )
 ```
@@ -174,11 +192,12 @@ client, err := langfuse.New(
 package main
 
 import (
+    "context"
     "log"
     "net/http"
     "time"
 
-    "github.com/jdziat/langfuse-go/langfuse"
+    langfuse "github.com/jdziat/langfuse-go"
 )
 
 func main() {
@@ -188,23 +207,19 @@ func main() {
     }
 
     // Initialize with all options
-    client, err := langfuse.New(
-        // Authentication
-        langfuse.WithPublicKey("pk_lf_..."),
-        langfuse.WithSecretKey("sk_lf_..."),
-
+    client, err := langfuse.New("pk-lf-...", "sk-lf-...",
         // Region / Base URL
         langfuse.WithRegion(langfuse.RegionUS),
 
         // Batching
         langfuse.WithBatchSize(75),
-        langfuse.WithFlushInterval(8 * time.Second),
+        langfuse.WithFlushInterval(8*time.Second),
 
         // Retry
         langfuse.WithMaxRetries(5),
 
         // HTTP
-        langfuse.WithTimeout(20 * time.Second),
+        langfuse.WithTimeout(20*time.Second),
         langfuse.WithHTTPClient(httpClient),
     )
     if err != nil {
@@ -218,34 +233,22 @@ func main() {
 
 ## Environment Variables Reference
 
-All configuration options can be set via environment variables:
+Common configuration options can be set via environment variables:
 
 | Variable | Type | Default | Description |
 |----------|------|---------|-------------|
 | `LANGFUSE_PUBLIC_KEY` | string | - | Public API key |
 | `LANGFUSE_SECRET_KEY` | string | - | Secret API key |
-| `LANGFUSE_BASE_URL` | string | US Cloud | Base URL for API |
-| `LANGFUSE_BATCH_SIZE` | int | 100 | Max events per batch |
-| `LANGFUSE_FLUSH_INTERVAL` | duration | 10s | Flush interval |
-| `LANGFUSE_MAX_RETRIES` | int | 3 | Max retry attempts |
-| `LANGFUSE_TIMEOUT` | duration | 10s | HTTP timeout |
+| `LANGFUSE_BASE_URL` | string | EU Cloud | Base URL for API |
 
 ## Configuration Options Reference
 
-### WithPublicKey
+### WithRegion
 
-Set the public API key.
-
-```go
-langfuse.WithPublicKey("pk_lf_...")
-```
-
-### WithSecretKey
-
-Set the secret API key.
+Set the Langfuse cloud region.
 
 ```go
-langfuse.WithSecretKey("sk_lf_...")
+langfuse.WithRegion(langfuse.RegionUS) // or langfuse.RegionEU
 ```
 
 ### WithBaseURL
@@ -254,14 +257,6 @@ Set a custom base URL (for self-hosted deployments).
 
 ```go
 langfuse.WithBaseURL("https://langfuse.yourcompany.com")
-```
-
-### WithRegion
-
-Set the Langfuse cloud region.
-
-```go
-langfuse.WithRegion(langfuse.RegionUS) // or langfuse.RegionEU
 ```
 
 ### WithBatchSize
@@ -280,6 +275,14 @@ Set how often batched events are sent.
 langfuse.WithFlushInterval(5 * time.Second)
 ```
 
+### WithBatchQueueSize
+
+Set the capacity of the internal event queue.
+
+```go
+langfuse.WithBatchQueueSize(2000)
+```
+
 ### WithMaxRetries
 
 Set the maximum number of retry attempts.
@@ -296,12 +299,20 @@ Set the HTTP request timeout.
 langfuse.WithTimeout(30 * time.Second)
 ```
 
+### WithDebug
+
+Enable debug logging.
+
+```go
+langfuse.WithDebug(true)
+```
+
 ### WithHTTPClient
 
 Use a custom HTTP client.
 
 ```go
-langfuse.WithHTTPClient(customClient)
+langfuse.WithHTTPClient(&http.Client{Timeout: 30 * time.Second})
 ```
 
 ## Best Practices
@@ -311,9 +322,10 @@ langfuse.WithHTTPClient(customClient)
 For development, use smaller batch sizes and shorter intervals for faster feedback:
 
 ```go
-client, err := langfuse.New(
+client, err := langfuse.New("pk-lf-...", "sk-lf-...",
     langfuse.WithBatchSize(10),
-    langfuse.WithFlushInterval(2 * time.Second),
+    langfuse.WithFlushInterval(2*time.Second),
+    langfuse.WithDebug(true),
 )
 ```
 
@@ -322,9 +334,9 @@ client, err := langfuse.New(
 For production, optimize for throughput:
 
 ```go
-client, err := langfuse.New(
+client, err := langfuse.New("pk-lf-...", "sk-lf-...",
     langfuse.WithBatchSize(100),
-    langfuse.WithFlushInterval(10 * time.Second),
+    langfuse.WithFlushInterval(10*time.Second),
     langfuse.WithMaxRetries(3),
 )
 ```
@@ -334,25 +346,20 @@ client, err := langfuse.New(
 For applications generating many events:
 
 ```go
-client, err := langfuse.New(
+client, err := langfuse.New("pk-lf-...", "sk-lf-...",
     langfuse.WithBatchSize(200),
-    langfuse.WithFlushInterval(15 * time.Second),
-    langfuse.WithTimeout(30 * time.Second),
+    langfuse.WithBatchQueueSize(5000),
+    langfuse.WithFlushInterval(15*time.Second),
+    langfuse.WithTimeout(30*time.Second),
 )
 ```
 
 ### Graceful Shutdown
 
-Always ensure graceful shutdown in production:
+Always ensure graceful shutdown in production. Give the shutdown a bounded
+timeout so queued events get a chance to flush:
 
 ```go
-// Set up signal handling
-sigChan := make(chan os.Signal, 1)
-signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-
-// Wait for signal
-<-sigChan
-
 // Graceful shutdown with timeout
 ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 defer cancel()
@@ -367,7 +374,7 @@ if err := client.Shutdown(ctx); err != nil {
 The SDK validates configuration at initialization:
 
 ```go
-client, err := langfuse.New(
+client, err := langfuse.New("pk-lf-...", "sk-lf-...",
     langfuse.WithBatchSize(-1), // Invalid
 )
 if err != nil {
@@ -378,7 +385,7 @@ if err != nil {
 
 Common validation errors:
 
-- Invalid API key format
+- Invalid or missing API keys
 - Negative batch size
 - Negative flush interval
 - Invalid base URL format

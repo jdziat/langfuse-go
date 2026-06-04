@@ -3,19 +3,23 @@ title: API Reference
 weight: 5
 ---
 
-Complete reference for the Langfuse Go SDK.
+Complete reference for the Langfuse Go SDK. For the full, always-current
+reference see the [Go package documentation](https://pkg.go.dev/github.com/jdziat/langfuse-go).
 
 ## Client
 
 ### New
 
-Creates a new Langfuse client.
+Creates a new Langfuse client. The public and secret keys are required
+positional arguments; behavior is tuned with `ConfigOption` functions.
 
-```go
-func New(opts ...Option) (*Client, error)
+```text
+func New(publicKey, secretKey string, opts ...ConfigOption) (*Client, error)
 ```
 
 **Parameters:**
+- `publicKey`: Langfuse public API key (`pk-lf-...`)
+- `secretKey`: Langfuse secret API key (`sk-lf-...`)
 - `opts`: Configuration options (see [Configuration Options](#configuration-options))
 
 **Returns:**
@@ -24,52 +28,72 @@ func New(opts ...Option) (*Client, error)
 
 **Example:**
 ```go
-client, err := langfuse.New(
-    langfuse.WithPublicKey("pk_lf_..."),
-    langfuse.WithSecretKey("sk_lf_..."),
+client, err := langfuse.New("pk-lf-...", "sk-lf-...",
+    langfuse.WithRegion(langfuse.RegionUS),
 )
+if err != nil {
+    log.Fatal(err)
+}
+defer client.Shutdown(context.Background())
 ```
 
 ### Client Methods
 
-#### Trace
+#### NewTrace
 
-Creates a new trace.
+Returns a fluent `TraceBuilder`. Chain setters and finish with `Create(ctx)`.
 
-```go
-func (c *Client) Trace(params TraceParams) *Trace
+```text
+func (c *Client) NewTrace() *TraceBuilder
 ```
-
-**Parameters:**
-- `params`: Trace configuration (see [TraceParams](#traceparams))
-
-**Returns:**
-- `*Trace`: New trace object
 
 **Example:**
 ```go
-trace := client.Trace(langfuse.TraceParams{
-    Name: "chat-completion",
-    UserID: "user-123",
-})
+ctx := context.Background()
+
+trace, err := client.NewTrace().
+    Name("chat-completion").
+    UserID("user-123").
+    Create(ctx)
+if err != nil {
+    log.Fatal(err)
+}
+_ = trace
+```
+
+#### Trace
+
+Creates a trace in a single call using `TraceOption` functions.
+
+```text
+func (c *Client) Trace(ctx context.Context, name string, opts ...TraceOption) (*TraceContext, error)
+```
+
+**Example:**
+```go
+ctx := context.Background()
+
+trace, err := client.Trace(ctx, "chat-completion",
+    langfuse.WithUserID("user-123"),
+)
+if err != nil {
+    log.Fatal(err)
+}
+_ = trace
 ```
 
 #### Flush
 
 Flushes all pending events to Langfuse.
 
-```go
+```text
 func (c *Client) Flush(ctx context.Context) error
 ```
 
-**Parameters:**
-- `ctx`: Context for timeout/cancellation
-
-**Returns:**
-- `error`: Flush error, if any
-
 **Example:**
 ```go
+ctx := context.Background()
+
 if err := client.Flush(ctx); err != nil {
     log.Printf("Flush failed: %v", err)
 }
@@ -79,331 +103,215 @@ if err := client.Flush(ctx); err != nil {
 
 Flushes pending events and closes the client.
 
-```go
+```text
 func (c *Client) Shutdown(ctx context.Context) error
 ```
-
-**Parameters:**
-- `ctx`: Context for timeout/cancellation
-
-**Returns:**
-- `error`: Shutdown error, if any
 
 **Example:**
 ```go
 defer client.Shutdown(context.Background())
 ```
 
-#### Evaluator
+#### Sub-client Accessors
 
-Creates a new LLM-as-a-Judge evaluator.
+The client exposes sub-clients for the various Langfuse resources:
 
-```go
-func (c *Client) Evaluator(params EvaluatorParams) *Evaluator
-```
-
-**Parameters:**
-- `params`: Evaluator configuration (see [EvaluatorParams](#evaluatorparams))
-
-**Returns:**
-- `*Evaluator`: New evaluator object
-
-**Example:**
-```go
-evaluator := client.Evaluator(langfuse.EvaluatorParams{
-    Name: "quality",
-    Model: "gpt-4",
-    Prompt: "Rate quality from 0.0 to 1.0...",
-})
+```text
+func (c *Client) Traces() *TracesClient
+func (c *Client) Observations() *ObservationsClient
+func (c *Client) Scores() *ScoresClient
+func (c *Client) Prompts() *PromptsClient
+func (c *Client) Datasets() *DatasetsClient
+func (c *Client) Sessions() *SessionsClient
+func (c *Client) Models() *ModelsClient
 ```
 
 ## Configuration Options
 
-Configuration options for `New()`.
+Configuration options for `New()`. Each returns a `ConfigOption`.
 
-### WithPublicKey
+### WithRegion
 
-```go
-func WithPublicKey(key string) Option
+```text
+func WithRegion(region Region) ConfigOption
 ```
 
-Sets the Langfuse public API key.
-
-**Environment Variable:** `LANGFUSE_PUBLIC_KEY`
-
-### WithSecretKey
-
-```go
-func WithSecretKey(key string) Option
-```
-
-Sets the Langfuse secret API key.
-
-**Environment Variable:** `LANGFUSE_SECRET_KEY`
+Sets the Langfuse cloud region (`RegionEU` default, or `RegionUS`).
 
 ### WithBaseURL
 
-```go
-func WithBaseURL(url string) Option
+```text
+func WithBaseURL(baseURL string) ConfigOption
 ```
 
 Sets a custom base URL (for self-hosted deployments).
 
 **Environment Variable:** `LANGFUSE_BASE_URL`
 
-### WithRegion
-
-```go
-func WithRegion(region Region) Option
-```
-
-Sets the Langfuse cloud region.
-
-**Options:**
-- `RegionUS`: US cloud (default)
-- `RegionEU`: EU cloud
-
 ### WithBatchSize
 
-```go
-func WithBatchSize(size int) Option
+```text
+func WithBatchSize(size int) ConfigOption
 ```
 
-Sets the maximum number of events per batch.
+Sets the maximum number of events per batch. **Default:** 100
 
-**Default:** 100
+### WithBatchQueueSize
 
-**Environment Variable:** `LANGFUSE_BATCH_SIZE`
+```text
+func WithBatchQueueSize(size int) ConfigOption
+```
+
+Sets the capacity of the internal event queue.
 
 ### WithFlushInterval
 
-```go
-func WithFlushInterval(interval time.Duration) Option
+```text
+func WithFlushInterval(interval time.Duration) ConfigOption
 ```
 
-Sets how often batched events are sent.
-
-**Default:** 10 seconds
-
-**Environment Variable:** `LANGFUSE_FLUSH_INTERVAL`
+Sets how often batched events are sent. **Default:** 10 seconds
 
 ### WithMaxRetries
 
-```go
-func WithMaxRetries(retries int) Option
+```text
+func WithMaxRetries(maxRetries int) ConfigOption
 ```
 
-Sets the maximum number of retry attempts.
-
-**Default:** 3
-
-**Environment Variable:** `LANGFUSE_MAX_RETRIES`
+Sets the maximum number of retry attempts. **Default:** 3
 
 ### WithTimeout
 
-```go
-func WithTimeout(timeout time.Duration) Option
+```text
+func WithTimeout(timeout time.Duration) ConfigOption
 ```
 
-Sets the HTTP request timeout.
+Sets the HTTP request timeout. **Default:** 10 seconds
 
-**Default:** 10 seconds
+### WithDebug
 
-**Environment Variable:** `LANGFUSE_TIMEOUT`
+```text
+func WithDebug(debug bool) ConfigOption
+```
+
+Enables debug logging.
 
 ### WithHTTPClient
 
-```go
-func WithHTTPClient(client *http.Client) Option
+```text
+func WithHTTPClient(client *http.Client) ConfigOption
 ```
 
 Uses a custom HTTP client.
 
 ## Trace
 
-### Trace Methods
+`client.NewTrace()` returns a `*TraceBuilder`. `Create(ctx)` returns a
+`*TraceContext`.
 
-#### Update
+### TraceBuilder
 
-Updates the trace with new parameters.
-
-```go
-func (t *Trace) Update(params TraceParams)
+```text
+func (b *TraceBuilder) ID(id string) *TraceBuilder
+func (b *TraceBuilder) Name(name string) *TraceBuilder
+func (b *TraceBuilder) UserID(userID string) *TraceBuilder
+func (b *TraceBuilder) SessionID(sessionID string) *TraceBuilder
+func (b *TraceBuilder) Input(input any) *TraceBuilder
+func (b *TraceBuilder) Output(output any) *TraceBuilder
+func (b *TraceBuilder) Metadata(metadata Metadata) *TraceBuilder
+func (b *TraceBuilder) Tags(tags []string) *TraceBuilder
+func (b *TraceBuilder) Release(release string) *TraceBuilder
+func (b *TraceBuilder) Version(version string) *TraceBuilder
+func (b *TraceBuilder) Environment(env string) *TraceBuilder
+func (b *TraceBuilder) Public(public bool) *TraceBuilder
+func (b *TraceBuilder) Create(ctx context.Context) (*TraceContext, error)
 ```
 
-**Parameters:**
-- `params`: Updated trace parameters
+### TraceContext
+
+```text
+func (t *TraceContext) ID() string
+func (t *TraceContext) Update() *TraceUpdateBuilder
+func (t *TraceContext) NewSpan() *SpanBuilder
+func (t *TraceContext) NewGeneration() *GenerationBuilder
+func (t *TraceContext) NewEvent() *EventBuilder
+func (t *TraceContext) NewScore() *ScoreBuilder
+```
+
+`TraceUpdateBuilder` mirrors the trace setters and is finished with
+`Apply(ctx) error`.
 
 **Example:**
 ```go
-trace.Update(langfuse.TraceParams{
-    Output: map[string]any{"result": "success"},
-})
-```
+ctx := context.Background()
 
-#### Generation
+trace, err := client.NewTrace().Name("chat-completion").Create(ctx)
+if err != nil {
+    log.Fatal(err)
+}
 
-Creates a generation within the trace.
-
-```go
-func (t *Trace) Generation(params GenerationParams) *Generation
-```
-
-**Parameters:**
-- `params`: Generation configuration
-
-**Returns:**
-- `*Generation`: New generation object
-
-**Example:**
-```go
-generation := trace.Generation(langfuse.GenerationParams{
-    Name: "openai-chat",
-    Model: "gpt-4",
-})
-```
-
-#### Span
-
-Creates a span within the trace.
-
-```go
-func (t *Trace) Span(params SpanParams) *Span
-```
-
-**Parameters:**
-- `params`: Span configuration
-
-**Returns:**
-- `*Span`: New span object
-
-**Example:**
-```go
-span := trace.Span(langfuse.SpanParams{
-    Name: "retrieve-documents",
-})
-```
-
-#### Event
-
-Creates an event within the trace.
-
-```go
-func (t *Trace) Event(params EventParams) *Event
-```
-
-**Parameters:**
-- `params`: Event configuration
-
-**Returns:**
-- `*Event`: New event object
-
-**Example:**
-```go
-event := trace.Event(langfuse.EventParams{
-    Name: "cache-hit",
-})
-```
-
-#### Score
-
-Adds a score to the trace.
-
-```go
-func (t *Trace) Score(params ScoreParams)
-```
-
-**Parameters:**
-- `params`: Score configuration
-
-**Example:**
-```go
-trace.Score(langfuse.ScoreParams{
-    Name: "user-rating",
-    Value: 5.0,
-})
-```
-
-### TraceParams
-
-Configuration for traces.
-
-```go
-type TraceParams struct {
-    Name      string         // Trace name
-    ID        string         // Custom trace ID (optional)
-    UserID    string         // User identifier (optional)
-    SessionID string         // Session identifier (optional)
-    Input     map[string]any // Input data (optional)
-    Output    map[string]any // Output data (optional)
-    Metadata  map[string]any // Additional metadata (optional)
-    Tags      []string       // Tags for filtering (optional)
-    Public    bool           // Make trace public (optional)
+if err := trace.Update().
+    Output(map[string]any{"result": "success"}).
+    Apply(ctx); err != nil {
+    log.Printf("update failed: %v", err)
 }
 ```
 
 ## Generation
 
-### Generation Methods
+`trace.NewGeneration()` returns a `*GenerationBuilder`. `Create(ctx)` returns a
+`*GenerationContext`.
 
-#### Update
+### GenerationBuilder
 
-Updates the generation with new parameters.
-
-```go
-func (g *Generation) Update(params GenerationParams)
+```text
+func (b *GenerationBuilder) Name(name string) *GenerationBuilder
+func (b *GenerationBuilder) Model(model string) *GenerationBuilder
+func (b *GenerationBuilder) ModelParameters(params Metadata) *GenerationBuilder
+func (b *GenerationBuilder) Input(input any) *GenerationBuilder
+func (b *GenerationBuilder) Output(output any) *GenerationBuilder
+func (b *GenerationBuilder) Metadata(metadata Metadata) *GenerationBuilder
+func (b *GenerationBuilder) Usage(usage *Usage) *GenerationBuilder
+func (b *GenerationBuilder) UsageTokens(input, output int) *GenerationBuilder
+func (b *GenerationBuilder) PromptName(name string) *GenerationBuilder
+func (b *GenerationBuilder) PromptVersion(version int) *GenerationBuilder
+func (b *GenerationBuilder) Create(ctx context.Context) (*GenerationContext, error)
 ```
 
-**Parameters:**
-- `params`: Updated generation parameters
+### GenerationContext
+
+```text
+func (g *GenerationContext) ID() string
+func (g *GenerationContext) Update() *GenerationUpdateBuilder
+func (g *GenerationContext) End(ctx context.Context) error
+func (g *GenerationContext) EndWithOutput(ctx context.Context, output any) error
+func (g *GenerationContext) EndWithUsage(ctx context.Context, output any, inputTokens, outputTokens int) error
+func (g *GenerationContext) NewScore() *ScoreBuilder
+func (g *GenerationContext) NewSpan() *SpanBuilder
+func (g *GenerationContext) NewGeneration() *GenerationBuilder
+func (g *GenerationContext) NewEvent() *EventBuilder
+```
 
 **Example:**
 ```go
-generation.Update(langfuse.GenerationParams{
-    Output: responseData,
-    Usage: &langfuse.Usage{
-        PromptTokens: 10,
-        CompletionTokens: 20,
-        TotalTokens: 30,
-    },
-})
-```
+ctx := context.Background()
 
-#### Score
+trace, err := client.NewTrace().Name("llm-call").Create(ctx)
+if err != nil {
+    log.Fatal(err)
+}
 
-Adds a score to the generation.
+generation, err := trace.NewGeneration().
+    Name("openai-chat").
+    Model("gpt-4").
+    Create(ctx)
+if err != nil {
+    log.Fatal(err)
+}
 
-```go
-func (g *Generation) Score(params ScoreParams)
-```
-
-**Parameters:**
-- `params`: Score configuration
-
-**Example:**
-```go
-generation.Score(langfuse.ScoreParams{
-    Name: "quality",
-    Value: 0.95,
-})
-```
-
-### GenerationParams
-
-Configuration for generations.
-
-```go
-type GenerationParams struct {
-    Name            string         // Generation name
-    Model           string         // Model name (e.g., "gpt-4")
-    ID              string         // Custom generation ID (optional)
-    Input           map[string]any // Input/prompt (optional)
-    Output          map[string]any // Output/completion (optional)
-    Metadata        map[string]any // Additional metadata (optional)
-    ModelParameters map[string]any // Model parameters (optional)
-    Usage           *Usage         // Token usage (optional)
-    PromptName      string         // Associated prompt name (optional)
-    PromptVersion   int            // Prompt version (optional)
+// output, input tokens, output tokens
+if err := generation.EndWithUsage(ctx, "Hi! How can I help?", 10, 8); err != nil {
+    log.Printf("end failed: %v", err)
 }
 ```
 
@@ -411,215 +319,220 @@ type GenerationParams struct {
 
 Token usage information.
 
-```go
+```text
 type Usage struct {
-    PromptTokens     int // Tokens in prompt
-    CompletionTokens int // Tokens in completion
-    TotalTokens      int // Total tokens
+    Input      int     // input tokens
+    Output     int     // output tokens
+    Total      int     // total tokens
+    Unit       string  // usage unit
+    InputCost  float64 // cost of input tokens
+    OutputCost float64 // cost of output tokens
+    TotalCost  float64 // total cost
 }
 ```
 
 ## Span
 
-### Span Methods
+`trace.NewSpan()` returns a `*SpanBuilder`. `Create(ctx)` returns a
+`*SpanContext`. Spans can also be created from a `SpanContext` or
+`GenerationContext` to nest observations.
 
-#### Update
+### SpanBuilder
 
-Updates the span with new parameters.
-
-```go
-func (s *Span) Update(params SpanParams)
+```text
+func (b *SpanBuilder) ID(id string) *SpanBuilder
+func (b *SpanBuilder) Name(name string) *SpanBuilder
+func (b *SpanBuilder) Input(input any) *SpanBuilder
+func (b *SpanBuilder) Output(output any) *SpanBuilder
+func (b *SpanBuilder) Metadata(metadata Metadata) *SpanBuilder
+func (b *SpanBuilder) Level(level ObservationLevel) *SpanBuilder
+func (b *SpanBuilder) Create(ctx context.Context) (*SpanContext, error)
 ```
 
-**Parameters:**
-- `params`: Updated span parameters
+### SpanContext
+
+```text
+func (s *SpanContext) ID() string
+func (s *SpanContext) Update() *SpanUpdateBuilder
+func (s *SpanContext) End(ctx context.Context) error
+func (s *SpanContext) EndWithOutput(ctx context.Context, output any) error
+func (s *SpanContext) NewSpan() *SpanBuilder
+func (s *SpanContext) NewGeneration() *GenerationBuilder
+func (s *SpanContext) NewEvent() *EventBuilder
+func (s *SpanContext) NewScore() *ScoreBuilder
+```
 
 **Example:**
 ```go
-span.Update(langfuse.SpanParams{
-    Output: map[string]any{"results": []string{"doc1", "doc2"}},
-})
-```
+ctx := context.Background()
 
-#### Generation
+trace, err := client.NewTrace().Name("pipeline").Create(ctx)
+if err != nil {
+    log.Fatal(err)
+}
 
-Creates a generation within the span.
+span, err := trace.NewSpan().
+    Name("retrieve-documents").
+    Create(ctx)
+if err != nil {
+    log.Fatal(err)
+}
 
-```go
-func (s *Span) Generation(params GenerationParams) *Generation
-```
-
-**Parameters:**
-- `params`: Generation configuration
-
-**Returns:**
-- `*Generation`: New generation object
-
-#### Span
-
-Creates a nested span within this span.
-
-```go
-func (s *Span) Span(params SpanParams) *Span
-```
-
-**Parameters:**
-- `params`: Span configuration
-
-**Returns:**
-- `*Span`: New span object
-
-#### Event
-
-Creates an event within the span.
-
-```go
-func (s *Span) Event(params EventParams) *Event
-```
-
-**Parameters:**
-- `params`: Event configuration
-
-**Returns:**
-- `*Event`: New event object
-
-#### Score
-
-Adds a score to the span.
-
-```go
-func (s *Span) Score(params ScoreParams)
-```
-
-**Parameters:**
-- `params`: Score configuration
-
-### SpanParams
-
-Configuration for spans.
-
-```go
-type SpanParams struct {
-    Name     string         // Span name
-    ID       string         // Custom span ID (optional)
-    Input    map[string]any // Input data (optional)
-    Output   map[string]any // Output data (optional)
-    Metadata map[string]any // Additional metadata (optional)
+if err := span.EndWithOutput(ctx, map[string]any{
+    "results": []string{"doc1", "doc2"},
+}); err != nil {
+    log.Printf("end failed: %v", err)
 }
 ```
 
 ## Event
 
-### EventParams
+`trace.NewEvent()` returns an `*EventBuilder`. Events are point-in-time and are
+sent with `Create(ctx)`.
 
-Configuration for events.
+### EventBuilder
 
+```text
+func (b *EventBuilder) ID(id string) *EventBuilder
+func (b *EventBuilder) Name(name string) *EventBuilder
+func (b *EventBuilder) Input(input any) *EventBuilder
+func (b *EventBuilder) Output(output any) *EventBuilder
+func (b *EventBuilder) Metadata(metadata Metadata) *EventBuilder
+func (b *EventBuilder) Level(level ObservationLevel) *EventBuilder
+func (b *EventBuilder) Create(ctx context.Context) error
+```
+
+**Example:**
 ```go
-type EventParams struct {
-    Name     string         // Event name
-    ID       string         // Custom event ID (optional)
-    Input    map[string]any // Event data (optional)
-    Metadata map[string]any // Additional metadata (optional)
+ctx := context.Background()
+
+trace, err := client.NewTrace().Name("pipeline").Create(ctx)
+if err != nil {
+    log.Fatal(err)
+}
+
+if err := trace.NewEvent().Name("cache-hit").Create(ctx); err != nil {
+    log.Printf("event failed: %v", err)
 }
 ```
 
 ## Score
 
-### ScoreParams
+`NewScore()` (on a trace, span, or generation context) returns a
+`*ScoreBuilder`.
 
-Configuration for scores.
+### ScoreBuilder
 
-```go
-type ScoreParams struct {
-    Name    string  // Score name
-    Value   float64 // Score value
-    Comment string  // Optional comment (optional)
-}
+```text
+func (b *ScoreBuilder) Name(name string) *ScoreBuilder
+func (b *ScoreBuilder) Value(value any) *ScoreBuilder
+func (b *ScoreBuilder) NumericValue(value float64) *ScoreBuilder
+func (b *ScoreBuilder) CategoricalValue(value string) *ScoreBuilder
+func (b *ScoreBuilder) BooleanValue(value bool) *ScoreBuilder
+func (b *ScoreBuilder) Comment(comment string) *ScoreBuilder
+func (b *ScoreBuilder) ObservationID(id string) *ScoreBuilder
+func (b *ScoreBuilder) ConfigID(id string) *ScoreBuilder
+func (b *ScoreBuilder) Metadata(metadata Metadata) *ScoreBuilder
+func (b *ScoreBuilder) Create(ctx context.Context) error
 ```
-
-## Evaluator
-
-### Evaluator Methods
-
-#### Evaluate
-
-Evaluates an observation using LLM-as-a-Judge.
-
-```go
-func (e *Evaluator) Evaluate(ctx context.Context, params EvaluateParams) (*Score, error)
-```
-
-**Parameters:**
-- `ctx`: Context for timeout/cancellation
-- `params`: Evaluation parameters
-
-**Returns:**
-- `*Score`: Evaluation score
-- `error`: Evaluation error, if any
 
 **Example:**
 ```go
-score, err := evaluator.Evaluate(ctx, langfuse.EvaluateParams{
-    ObservationID: generation.ID,
-    Input: inputData,
-    Output: outputData,
+ctx := context.Background()
+
+trace, err := client.NewTrace().Name("pipeline").Create(ctx)
+if err != nil {
+    log.Fatal(err)
+}
+
+if err := trace.NewScore().
+    Name("user-rating").
+    NumericValue(5.0).
+    Create(ctx); err != nil {
+    log.Printf("score failed: %v", err)
+}
+```
+
+## Prompts
+
+```text
+func (c *PromptsClient) Get(ctx context.Context, name string, params *GetPromptParams) (*Prompt, error)
+func (c *PromptsClient) GetLatest(ctx context.Context, name string) (*Prompt, error)
+func (c *PromptsClient) GetByVersion(ctx context.Context, name string, version int) (*Prompt, error)
+func (c *PromptsClient) GetByLabel(ctx context.Context, name string, label string) (*Prompt, error)
+```
+
+**Example:**
+```go
+ctx := context.Background()
+
+prompt, err := client.Prompts().Get(ctx, "chat-template", nil)
+if err != nil {
+    log.Fatal(err)
+}
+_ = prompt
+```
+
+## Datasets
+
+```text
+func (c *DatasetsClient) Create(ctx context.Context, req *CreateDatasetRequest) (*Dataset, error)
+func (c *DatasetsClient) CreateItem(ctx context.Context, req *CreateDatasetItemRequest) (*DatasetItem, error)
+func (c *DatasetsClient) CreateRunItem(ctx context.Context, req *CreateDatasetRunItemRequest) (*DatasetRunItem, error)
+```
+
+**Example:**
+```go
+ctx := context.Background()
+
+dataset, err := client.Datasets().Create(ctx, &langfuse.CreateDatasetRequest{
+    Name:        "qa-dataset",
+    Description: "Question-answering evaluation set",
 })
-```
-
-### EvaluatorParams
-
-Configuration for evaluators.
-
-```go
-type EvaluatorParams struct {
-    Name   string // Evaluator name
-    Model  string // Model to use (e.g., "gpt-4")
-    Prompt string // Evaluation prompt template
+if err != nil {
+    log.Fatal(err)
 }
+_ = dataset
 ```
 
-### EvaluateParams
-
-Parameters for evaluation.
-
-```go
-type EvaluateParams struct {
-    ObservationID string         // ID of observation to evaluate
-    Input         map[string]any // Input data
-    Output        map[string]any // Output data
-}
-```
-
-## Types
+## Types and Constants
 
 ### Region
 
-Langfuse cloud regions.
-
-```go
-const (
-    RegionUS Region = "US" // US cloud (default)
-    RegionEU Region = "EU" // EU cloud
-)
+```text
+RegionEU // EU cloud (default)
+RegionUS // US cloud
 ```
 
-### Error Types
+### Observation Levels
 
-Common error types returned by the SDK.
-
-```go
-var (
-    ErrInvalidConfig    = errors.New("invalid configuration")
-    ErrInvalidAPIKey    = errors.New("invalid API key")
-    ErrFlushTimeout     = errors.New("flush timeout")
-    ErrShutdownTimeout  = errors.New("shutdown timeout")
-    ErrEvaluationFailed = errors.New("evaluation failed")
-)
+```text
+ObservationLevelDebug
+ObservationLevelDefault
+ObservationLevelWarning
+ObservationLevelError
 ```
 
-## Examples
+### Score Data Types
 
-### Complete Example
+```text
+ScoreDataTypeNumeric
+ScoreDataTypeCategorical
+ScoreDataTypeBoolean
+```
+
+### Metadata
+
+`Metadata` is a `map[string]any` with helper methods such as `Set`, `Get`,
+`Has`, `Merge`, `Clone`, and `Filter`. Create one with `NewMetadata()` or a
+composite literal:
+
+```go
+meta := langfuse.Metadata{"environment": "production"}
+_ = meta
+```
+
+## Complete Example
 
 ```go
 package main
@@ -628,63 +541,64 @@ import (
     "context"
     "log"
 
-    "github.com/jdziat/langfuse-go/langfuse"
+    langfuse "github.com/jdziat/langfuse-go"
 )
 
 func main() {
+    ctx := context.Background()
+
     // Initialize client
-    client, err := langfuse.New(
-        langfuse.WithPublicKey("pk_lf_..."),
-        langfuse.WithSecretKey("sk_lf_..."),
+    client, err := langfuse.New("pk-lf-...", "sk-lf-...",
         langfuse.WithRegion(langfuse.RegionUS),
     )
     if err != nil {
         log.Fatal(err)
     }
-    defer client.Shutdown(context.Background())
+    defer client.Shutdown(ctx)
 
     // Create trace
-    trace := client.Trace(langfuse.TraceParams{
-        Name: "chat-completion",
-        UserID: "user-123",
-        Input: map[string]any{
+    trace, err := client.NewTrace().
+        Name("chat-completion").
+        UserID("user-123").
+        Input(map[string]any{
             "messages": []map[string]string{
                 {"role": "user", "content": "Hello!"},
             },
-        },
-    })
+        }).
+        Create(ctx)
+    if err != nil {
+        log.Fatal(err)
+    }
 
     // Add generation
-    generation := trace.Generation(langfuse.GenerationParams{
-        Name: "openai-chat",
-        Model: "gpt-4",
-        Input: map[string]any{
+    generation, err := trace.NewGeneration().
+        Name("openai-chat").
+        Model("gpt-4").
+        Input(map[string]any{
             "messages": []map[string]string{
                 {"role": "user", "content": "Hello!"},
             },
-        },
-    })
+        }).
+        Create(ctx)
+    if err != nil {
+        log.Fatal(err)
+    }
 
-    // Update with response
-    generation.Update(langfuse.GenerationParams{
-        Output: map[string]any{
-            "response": "Hi! How can I help?",
-        },
-        Usage: &langfuse.Usage{
-            PromptTokens: 10,
-            CompletionTokens: 8,
-            TotalTokens: 18,
-        },
-    })
+    // Finish with output and token usage
+    if err := generation.EndWithUsage(ctx, "Hi! How can I help?", 10, 8); err != nil {
+        log.Printf("end failed: %v", err)
+    }
 
-    // Add score
-    generation.Score(langfuse.ScoreParams{
-        Name: "quality",
-        Value: 0.95,
-    })
+    // Add a score
+    if err := generation.NewScore().
+        Name("quality").
+        NumericValue(0.95).
+        Create(ctx); err != nil {
+        log.Printf("score failed: %v", err)
+    }
 
     // Flush
-    if err := client.Flush(context.Background()); err != nil {
+    if err := client.Flush(ctx); err != nil {
         log.Fatal(err)
     }
 }
@@ -694,5 +608,5 @@ func main() {
 
 - [Getting Started](../getting-started/) - Basic setup guide
 - [Tracing Guide](../tracing/) - Complete tracing documentation
-- [Evaluation Guide](../evaluation/) - LLM-as-a-Judge workflows
+- [Evaluation Guide](../evaluation/) - Scoring and evaluation-ready tracing
 - [Configuration](../configuration/) - Configuration reference
