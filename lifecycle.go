@@ -48,15 +48,15 @@ var ErrAlreadyClosed = pkglifecycle.ErrAlreadyClosed
 // Client Lifecycle Methods
 // ============================================================================
 
-// Note: Most core lifecycle methods (Close, Flush, State, IsActive, Uptime,
-// LifecycleStats, Health) are provided by the embedded *pkgclient.Client.
-// Shutdown is wrapped to convert ErrAlreadyClosed to ErrClientClosed for
-// backward compatibility.
+// Note: the core lifecycle methods (Close, Flush, State, IsActive, Uptime,
+// LifecycleStats, Health) are surfaced as explicit forwarders to the core
+// client in client.go. Shutdown is wrapped here to convert ErrAlreadyClosed to
+// ErrClientClosed for backward compatibility.
 
 // Shutdown gracefully shuts down the client, flushing any pending events.
 // Returns ErrClientClosed if already closed (for backward compatibility).
 func (c *Client) Shutdown(ctx context.Context) error {
-	err := c.Client.Shutdown(ctx)
+	err := c.core.Shutdown(ctx)
 	// Convert ErrAlreadyClosed to ErrClientClosed for backward compatibility
 	if err == ErrAlreadyClosed {
 		return ErrClientClosed
@@ -508,11 +508,14 @@ var ErrBackpressure = pkgclient.ErrBackpressure
 // Re-exported from pkg/client for consistent error comparisons with errors.Is().
 var ErrBatchDropped = pkgclient.ErrBatchDropped
 
-// Note: Most batch processing methods (batchProcessor, processBatchRequest, sendBatch,
-// waitForQueueSpace, estimateQueueSize, addEventToQueue, handleQueueFull)
-// are provided by the embedded *pkgclient.Client.
+// Note: the core batch processing machinery (batchProcessor, processBatchRequest,
+// sendBatch, waitForQueueSpace, estimateQueueSize, addEventToQueue,
+// handleQueueFull) lives on the unexported core *pkgclient.Client.
 //
-// queueEvent is a wrapper that converts root's ingestionEvent to pkgclient.IngestionEvent.
+// queueEvent is the internal path that converts root's ingestionEvent to
+// pkgclient.IngestionEvent and enqueues it on the core client. It is the only
+// route to the core client's QueueEvent; that method is intentionally not part
+// of the public *Client surface (the builders are the supported path).
 func (c *Client) queueEvent(ctx context.Context, event ingestionEvent) error {
 	// Convert root ingestionEvent to pkgclient.IngestionEvent
 	pkgEvent := pkgclient.IngestionEvent{
@@ -521,5 +524,5 @@ func (c *Client) queueEvent(ctx context.Context, event ingestionEvent) error {
 		Timestamp: pkgclient.Time{Time: event.Timestamp.Time},
 		Body:      event.Body,
 	}
-	return c.Client.QueueEvent(ctx, pkgEvent)
+	return c.core.QueueEvent(ctx, pkgEvent)
 }

@@ -26,18 +26,20 @@ import (
 var defaultStderrLogger = log.New(os.Stderr, "langfuse: ", log.LstdFlags)
 
 // Client is the main Langfuse client.
-// It embeds *pkgclient.Client for core functionality (HTTP, lifecycle, batching)
-// and adds sub-clients for the Langfuse API.
+// It wraps an internal core client for HTTP, lifecycle, batching, and
+// backpressure, and adds sub-clients for the Langfuse API.
+//
+// The core client is held in an unexported field rather than embedded, so the
+// public surface of *Client is the curated set of methods declared in this
+// package (Flush, Shutdown, Close, Health, State, etc.) plus the sub-client
+// accessors. Internal pkg/client and pkg/http types are never promoted onto the
+// public API.
 type Client struct {
-	// Embed core client for HTTP, lifecycle, batching, and backpressure.
-	//
-	// Embedding promotes the core client's exported methods (HTTP, QueueEvent,
-	// Config, etc.) onto *Client. Note that the promoted Config method returns
-	// the internal, field-lossy pkgclient.Config rather than the full root
-	// *Config the caller passed to New/NewWithConfig (root-only fields such as
-	// EvaluationConfig and StrictValidation are not present on pkgclient.Config).
-	// Use RootConfig to retrieve the complete, correctly-typed root configuration.
-	*pkgclient.Client
+	// core is the internal client providing HTTP, lifecycle, batching, and
+	// backpressure. It is intentionally a named, unexported field: its methods
+	// are surfaced only through the explicit forwarders defined in this package,
+	// so internal types are not leaked onto *Client.
+	core *pkgclient.Client
 
 	// Root-specific config (extends pkg/client.Config with evaluation, etc.)
 	rootConfig *Config
@@ -107,7 +109,7 @@ func NewWithConfig(cfg *Config) (*Client, error) {
 	}
 
 	c := &Client{
-		Client:     coreClient,
+		core:       coreClient,
 		rootConfig: &cfgCopy,
 	}
 
@@ -121,7 +123,7 @@ func NewWithConfig(cfg *Config) (*Client, error) {
 		c.metricsRecorder = NewMetricsRecorder(cfgCopy.Metrics)
 	}
 
-	// Initialize sub-clients using the embedded client's HTTP() method
+	// Initialize sub-clients using the core client's HTTP Doer.
 	c.traces = newTracesClient(c)
 	c.observations = newObservationsClient(c)
 	c.scores = newScoresClient(c)
@@ -279,7 +281,7 @@ func buildAsyncErrorBridge(cfg *Config) func(error) {
 }
 
 // handleError handles async errors for root-specific functionality.
-// For core client errors, the embedded client's handleError is used.
+// For core client errors, the core client's handleError is used.
 // This method handles errors specific to root-level features.
 func (c *Client) handleRootError(err error) {
 	handled := false
@@ -306,8 +308,6 @@ func (c *Client) handleRootError(err error) {
 		defaultStderrLogger.Printf("unhandled async error: %v", err)
 	}
 }
-
-// Note: log, logInfo, logError methods are provided by the embedded *pkgclient.Client
 
 // Traces returns the traces sub-client.
 func (c *Client) Traces() *TracesClient {
@@ -366,27 +366,30 @@ func (c *Client) MetricsRecorder() *MetricsRecorder {
 	return c.metricsRecorder
 }
 
-// RootConfig returns the full, correctly-typed root configuration that was
-// passed to New or NewWithConfig (with defaults applied).
+// Config returns the full, correctly-typed root configuration that was passed
+// to New or NewWithConfig (with defaults applied).
 //
-// Prefer RootConfig over the promoted Config method inherited from the embedded
-// *pkgclient.Client. Because the root Client anonymously embeds *pkgclient.Client,
-// the promoted Config method returns the internal pkgclient.Config, which omits
-// root-only fields such as EvaluationConfig and StrictValidation. RootConfig
-// returns the complete *Config so those fields are preserved.
-//
-// The returned pointer references the client's internal copy of the
-// configuration; treat it as read-only and do not mutate it.
+// The returned value is the complete *Config, including root-only fields such
+// as EvaluationConfig and StrictValidation. It references the client's internal
+// copy of the configuration; treat it as read-only and do not mutate it.
 //
 // Example:
 //
 //	client, _ := langfuse.New(pk, sk, langfuse.WithEvaluationConfig(evalCfg))
-//	cfg := client.RootConfig()
+//	cfg := client.Config()
 //	if cfg.EvaluationConfig != nil {
-//	    // root-only field is available here, unlike via the promoted Config method
+//	    // root-only field is available here
 //	}
-func (c *Client) RootConfig() *Config {
+func (c *Client) Config() *Config {
 	return c.rootConfig
+}
+
+// RootConfig is a deprecated alias for Config.
+//
+// Deprecated: use Config instead. RootConfig is retained for backward
+// compatibility and returns the same full root *Config.
+func (c *Client) RootConfig() *Config {
+	return c.Config()
 }
 
 // PromptsWithOptions returns a configured prompts sub-client.
@@ -492,21 +495,78 @@ func (c *Client) ModelsWithOptions(opts ...ModelsOption) *ConfiguredModelsClient
 	}
 }
 
-// Note: CircuitBreakerState, IsUnderBackpressure, GenerateID, IDStats methods
-// are provided by the embedded *pkgclient.Client
+// ============================================================================
+// Core Client Forwarders
+// ============================================================================
+//
+// The methods below are explicit forwarders to the unexported core client.
+// They form the curated public surface of *Client; the core client itself is
+// not embedded, so no internal pkg/client or pkg/http types are promoted.
+
+// Flush sends all pending events to Langfuse. It blocks until all events are
+// sent or the context is cancelled.
+func (c *Client) Flush(ctx context.Context) error {
+	return c.core.Flush(ctx)
+}
+
+// Close gracefully shuts down the client, flushing any pending events.
+// It is an alias for Shutdown.
+func (c *Client) Close(ctx context.Context) error {
+	return c.Shutdown(ctx)
+}
+
+// Health checks the health of the Langfuse API.
+func (c *Client) Health(ctx context.Context) (*HealthStatus, error) {
+	return c.core.Health(ctx)
+}
+
+// State returns the current client lifecycle state.
+func (c *Client) State() ClientState {
+	return c.core.State()
+}
+
+// IsActive returns true if the client is active and accepting events.
+func (c *Client) IsActive() bool {
+	return c.core.IsActive()
+}
+
+// Uptime returns the duration since the client was created.
+func (c *Client) Uptime() time.Duration {
+	return c.core.Uptime()
+}
+
+// LifecycleStats returns current lifecycle statistics, including uptime,
+// last activity time, and client state.
+func (c *Client) LifecycleStats() LifecycleStats {
+	return c.core.LifecycleStats()
+}
+
+// CircuitBreakerState returns the current circuit breaker state.
+func (c *Client) CircuitBreakerState() CircuitState {
+	return c.core.CircuitBreakerState()
+}
+
+// IsUnderBackpressure reports whether the client is currently under
+// backpressure (the event queue is filling beyond its warning threshold).
+func (c *Client) IsUnderBackpressure() bool {
+	return c.core.IsUnderBackpressure()
+}
+
+// IDStats returns statistics about ID generation.
+func (c *Client) IDStats() IDStats {
+	return c.core.IDStats()
+}
 
 // BackpressureStatus returns the current backpressure state.
 // Use this to monitor queue health and make decisions about event submission.
-// Note: This wraps the embedded client's method to return the root BackpressureHandlerStats type.
 func (c *Client) BackpressureStatus() BackpressureHandlerStats {
-	return c.Client.BackpressureStatus()
+	return c.core.BackpressureStatus()
 }
 
 // BackpressureLevel returns the current backpressure level.
 // Returns BackpressureNone if no backpressure handler is configured.
-// Note: This wraps the embedded client's method.
 func (c *Client) BackpressureLevel() BackpressureLevel {
-	return c.Client.BackpressureLevel()
+	return c.core.BackpressureLevel()
 }
 
 // ============================================================================

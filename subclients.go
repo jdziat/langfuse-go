@@ -26,7 +26,7 @@ type TracesClient struct {
 // newTracesClient creates a new TracesClient.
 func newTracesClient(client *Client) *TracesClient {
 	return &TracesClient{
-		impl: traces.New(client.HTTP()),
+		impl: traces.New(client.core.HTTP()),
 	}
 }
 
@@ -82,7 +82,7 @@ type ObservationsClient struct {
 // newObservationsClient creates a new ObservationsClient.
 func newObservationsClient(client *Client) *ObservationsClient {
 	return &ObservationsClient{
-		impl: observations.New(client.HTTP()),
+		impl: observations.New(client.core.HTTP()),
 	}
 }
 
@@ -179,7 +179,7 @@ type ScoresClient struct {
 // newScoresClient creates a new ScoresClient.
 func newScoresClient(client *Client) *ScoresClient {
 	return &ScoresClient{
-		impl: scores.New(client.HTTP()),
+		impl: scores.New(client.core.HTTP()),
 	}
 }
 
@@ -478,7 +478,7 @@ type SessionsClient struct {
 // newSessionsClient creates a new SessionsClient.
 func newSessionsClient(client *Client) *SessionsClient {
 	return &SessionsClient{
-		impl:   sessions.New(client.HTTP()),
+		impl:   sessions.New(client.core.HTTP()),
 		client: client,
 	}
 }
@@ -567,7 +567,7 @@ type ModelsClient struct {
 // newModelsClient creates a new ModelsClient.
 func newModelsClient(client *Client) *ModelsClient {
 	return &ModelsClient{
-		impl: models.New(client.HTTP()),
+		impl: models.New(client.core.HTTP()),
 	}
 }
 
@@ -651,7 +651,7 @@ type PromptsClient struct {
 // newPromptsClient creates a new PromptsClient.
 func newPromptsClient(client *Client) *PromptsClient {
 	return &PromptsClient{
-		impl: prompts.New(client.HTTP()),
+		impl: prompts.New(client.core.HTTP()),
 	}
 }
 
@@ -796,7 +796,7 @@ type DatasetsClient struct {
 // newDatasetsClient creates a new DatasetsClient.
 func newDatasetsClient(client *Client) *DatasetsClient {
 	return &DatasetsClient{
-		impl: datasets.New(client.HTTP()),
+		impl: datasets.New(client.core.HTTP()),
 	}
 }
 

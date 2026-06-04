@@ -103,19 +103,16 @@
 //
 // # Accessing Configuration
 //
-// To read back the configuration after construction, use [Client.RootConfig],
+// To read back the configuration after construction, use [Client.Config],
 // which returns the full root *[Config] (with defaults applied), including
-// root-only fields such as EvaluationConfig and StrictValidation.
+// root-only fields such as EvaluationConfig and StrictValidation:
 //
-// The [Client] embeds the internal *pkgclient.Client, which promotes a Config
-// method onto [Client]. That promoted method returns the internal,
-// field-lossy pkgclient.Config and omits root-only fields, so prefer
-// [Client.RootConfig] when you need the complete configuration:
-//
-//	cfg := client.RootConfig()
+//	cfg := client.Config()
 //	if cfg.EvaluationConfig != nil {
-//	    // root-only fields are available via RootConfig
+//	    // root-only fields are available via Config
 //	}
+//
+// [Client.RootConfig] is retained as a deprecated alias for [Client.Config].
 //
 // # Thread Safety
 //
