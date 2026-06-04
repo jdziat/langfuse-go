@@ -122,7 +122,78 @@ of the whole `git diff main..HEAD`.
 
 ---
 
-## Out of scope (explicitly)
+---
 
-- Hard deletion of any exported symbol or signature change (would break 1.x; would require a `/v2` module). Deferred to a future major version.
-- New features beyond wiring the four already-declared options.
+# Round 2 — Push to straight A's (breaking changes allowed, stay on v1)
+
+**Policy change (maintainer):** the library has a single user (the owner). Backward
+compatibility and semver are explicitly waived to make this a standout SDK — but it
+stays on the **v1 module path** (no `/v2`). Round 1's deprecations become deletions.
+
+Round 1 grades: API Design **B**, Engineering **A−**, Docs/Trust **A−**, Overall **B+**.
+Goal: **A in every section.** Same execution model (sequential packets, per-packet
+implement → strict 10x signoff → commit). Continues on branch `fix/review-remediation`.
+
+## Engineering → A
+
+### R1 — Version: true single source (no residual lie)
+- **Files:** new `internal/version/`, `doc.go`, `client.go`, `pkg/client/client.go`, `pkg/client/http.go`, `.releaserc.json`, CI/test.
+- **Fix:** put the version in one embedded file (e.g. `internal/version/version.txt`) imported by both the root and `pkg/client`, so direct `pkg/client` users no longer get the stale `0.1.0`. Update `.releaserc.json` `prepareCmd` to write that file (keep `VERSION` mirrored with a CI equality assertion, or make it the sole source). Delete the duplicate `Version` constants.
+- **Acceptance:** one writer; root and `pkg/client` both report the real version; a test asserts equality so release can't drift; build/vet/tests green.
+
+### R2 — HTTP hardening: real MaxDelay ceiling + panic-safe state callback
+- **Files:** `pkg/http/retry.go`, `pkg/http/circuit.go`, `pkg/http/http_test.go`.
+- **Fix:** cap the backoff **after** applying jitter so `MaxDelay` is a true maximum (currently jitter can push it to ~1.5×). Make `OnStateChange` dispatch panic-safe (recover) and ordering-sane.
+- **Acceptance:** tests prove delay never exceeds `MaxDelay`; a panicking `OnStateChange` cannot crash the breaker; build/vet/`-race` green.
+
+### R3 — Close critical-path test coverage
+- **Files:** `pkg/client/*_test.go`, `tests/`, optionally `.github/workflows/ci.yml`.
+- **Fix:** add tests for the previously-0%-coverage critical paths (`handleError`, `handleQueueFull`, async logging). Optionally add a coverage floor to CI.
+- **Acceptance:** new tests exercise those paths and fail if the behavior regresses; `-race` green.
+
+## API Design → A (breaking)
+
+### R4 — Replace the anonymous embed with a curated client
+- **Files:** `client.go`, `lifecycle.go`, `subclients.go`, `export_test.go`, tests.
+- **Fix:** replace anonymous `*pkgclient.Client` with a named `core` field; hand-write only the genuinely-public methods (Flush/Shutdown/Close/Health/State/…). `Config()` returns `*langfuse.Config`. Remove leaked `HTTP()`/`QueueEvent()` from the public surface (or hide behind an explicit `Advanced()`).
+- **Acceptance:** no internal types promoted onto the public client; `Config()` returns the root type; build/vet/`-race` green.
+
+### R5 — Delete the V1 surface
+- **Files:** `simple_api.go`, `builders.go`, `tests/v1_api_test.go`, `examples/v1_api/`.
+- **Fix:** remove `…V1` methods + `TraceContextV1`/`WrapTraceContext` and their tests/example.
+- **Acceptance:** symbols gone; nothing references them; build/`-race`/staticcheck green.
+
+### R6 — Delete the Validated* hierarchy
+- **Files:** `builders.go`, `tests/validated_builder_test.go`, related.
+- **Fix:** remove the `Validated*` builder tree (redundant now that `StrictValidation` is wired into the standard builders); migrate any unique coverage to strict-mode tests.
+- **Acceptance:** symbols gone; strict validation still covered; build/`-race`/staticcheck green.
+
+### R7 — Collapse remaining redundant idioms + naming + package collision
+- **Files:** `options.go`, `simple_api.go`, `builders.go`, `pkg/evaluation/` (rename), importers.
+- **Fix:** settle on ONE canonical creation idiom (fluent builders) plus at most one documented convenience; remove duplicate verbs; fix `apply2`/`apply3`; rename `pkg/evaluation` to remove the `package evaluation` name collision (or move under `internal/`).
+- **Acceptance:** one obvious way to create each object; no `applyN`; no two importable packages named `evaluation`; build/`-race`/staticcheck green.
+
+## Docs / Trust → A (after the API settles)
+
+### R8 — Re-sync all docs to the collapsed API
+- **Files:** `doc.go`, `README.md`, `content/docs/*`.
+- **Fix:** update every example and reference to the new single API; remove anything referencing deleted V1/Validated; tighten the Start Here.
+- **Depends on:** R4–R7.
+
+### R9 — Runnable godoc Examples for the canonical path
+- **Files:** `example_test.go` (root + key packages).
+- **Fix:** add compile-checked `Example…` functions that render on pkg.go.dev.
+- **Depends on:** R4–R7.
+
+### R10 — Strengthen the doc-snippet gate
+- **Files:** `scripts/check-doc-snippets.sh`, `.github/workflows/ci.yml`.
+- **Fix:** auto-wrap fragments so most of the (previously 97 skipped) snippets actually compile; drive the skip count down; keep CI green.
+- **Depends on:** R8, R9.
+
+## Final
+Full validation (`build`/`vet`/`-race`/`staticcheck`/examples/doc gate) **plus a fresh
+adversarial re-grade panel** (Design Visionary + 10x Engineer, independent of the
+implementers) scoring against A criteria.
+
+## Still out of scope
+- Moving to a `/v2` module path (staying on v1 by choice).
