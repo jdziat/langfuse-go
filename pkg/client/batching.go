@@ -84,25 +84,29 @@ func (c *Client) batchProcessor() {
 }
 
 // processBatchRequest handles sending a single batch request.
+//
+// Async batch delivery is intentionally decoupled from the context the caller
+// used to create the event. Once an event has been queued for background
+// sending, cancelling that context (for example when the originating request
+// completes) must not abort in-flight telemetry delivery. The batch is
+// therefore always sent with a fresh background context bounded by
+// DefaultBackgroundSendTimeout. Using the caller's context here would be a
+// time-of-check/time-of-use race: a context that is live when checked can be
+// cancelled mid-send, dropping the batch.
 func (c *Client) processBatchRequest(req batchRequest) {
 	start := time.Now()
 
-	// Check if request context is already cancelled before sending
-	if req.ctx.Err() != nil {
-		c.log("batch request context cancelled, using background context")
-		// Use a timeout context instead of the cancelled one
-		sendCtx, cancel := context.WithTimeout(context.Background(), DefaultBackgroundSendTimeout)
-		if err := c.sendBatch(sendCtx, req.events); err != nil {
-			c.handleError(err)
-		}
-		cancel()
-		if c.config.Metrics != nil {
-			c.config.Metrics.IncrementCounter("langfuse.batch.context_cancelled", 1)
-		}
-	} else {
-		if err := c.sendBatch(req.ctx, req.events); err != nil {
-			c.handleError(err)
-		}
+	sendCtx, cancel := context.WithTimeout(context.Background(), DefaultBackgroundSendTimeout)
+	defer cancel()
+
+	// Record (for observability) when the originating context was already
+	// cancelled, but deliver the batch regardless.
+	if req.ctx != nil && req.ctx.Err() != nil && c.config.Metrics != nil {
+		c.config.Metrics.IncrementCounter("langfuse.batch.context_cancelled", 1)
+	}
+
+	if err := c.sendBatch(sendCtx, req.events); err != nil {
+		c.handleError(err)
 	}
 
 	if c.config.Metrics != nil {
