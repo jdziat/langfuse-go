@@ -35,6 +35,11 @@ type Client struct {
 	// Root-specific config (extends pkg/client.Config with evaluation, etc.)
 	rootConfig *Config
 
+	// metricsRecorder is the internal SDK metrics recorder, constructed when
+	// EnableMetricsRecorder is set and a Metrics implementation is configured.
+	// It is nil otherwise. Retrieve it via MetricsRecorder().
+	metricsRecorder *MetricsRecorder
+
 	// Sub-clients for Langfuse API
 	traces       *TracesClient
 	observations *ObservationsClient
@@ -97,6 +102,16 @@ func NewWithConfig(cfg *Config) (*Client, error) {
 	c := &Client{
 		Client:     coreClient,
 		rootConfig: &cfgCopy,
+	}
+
+	// Construct the internal metrics recorder when explicitly enabled and a
+	// Metrics implementation is available. The recorder wraps the same Metrics
+	// sink the core client emits to, so queue/HTTP/batch metrics are recorded and
+	// can also be reported via the recorder's convenience methods. Retrieve it via
+	// MetricsRecorder(). When Metrics is nil the recorder is a no-op and is not
+	// created, mirroring the documented "requires Metrics to be set" contract.
+	if cfgCopy.EnableMetricsRecorder && cfgCopy.Metrics != nil {
+		c.metricsRecorder = NewMetricsRecorder(cfgCopy.Metrics)
 	}
 
 	// Initialize sub-clients using the embedded client's HTTP() method
@@ -190,7 +205,70 @@ func convertToPkgClientConfig(cfg *Config) *pkgclient.Config {
 		pkgCfg.OnBackpressure = cfg.OnBackpressure
 	}
 
+	// Bridge the async-error machinery (OnAsyncError / AsyncErrorConfig) into the
+	// core client's ErrorHandler. The core client invokes ErrorHandler(err) for
+	// every background failure (e.g. a failed batch send); this adapter wraps that
+	// raw error as a structured *AsyncError and routes it through the configured
+	// AsyncErrorHandler so the user's OnError callback fires. Any pre-existing
+	// ErrorHandler set directly on the root Config is preserved and still called.
+	if h := buildAsyncErrorBridge(cfg); h != nil {
+		pkgCfg.ErrorHandler = h
+	}
+
 	return pkgCfg
+}
+
+// buildAsyncErrorBridge constructs the func(error) installed as the core client's
+// ErrorHandler when the async-error options (OnAsyncError or AsyncErrorConfig) are
+// configured. It returns nil when neither is set, leaving the directly-forwarded
+// ErrorHandler (if any) in place.
+//
+// The returned handler first invokes any ErrorHandler the user set on the root
+// Config directly, then wraps the error as an *AsyncError (operation
+// AsyncOpBatchSend, the source of background failures) and dispatches it through an
+// AsyncErrorHandler built from AsyncErrorConfig and/or OnAsyncError.
+func buildAsyncErrorBridge(cfg *Config) func(error) {
+	if cfg.OnAsyncError == nil && cfg.AsyncErrorConfig == nil {
+		return nil
+	}
+
+	// Build the handler config from AsyncErrorConfig (if provided), then layer the
+	// OnAsyncError convenience callback on top so both fire.
+	handlerCfg := &AsyncErrorConfig{}
+	if cfg.AsyncErrorConfig != nil {
+		*handlerCfg = *cfg.AsyncErrorConfig
+	}
+	if cfg.Logger != nil && handlerCfg.Logger == nil {
+		handlerCfg.Logger = cfg.Logger
+	}
+	if cfg.Metrics != nil && handlerCfg.Metrics == nil {
+		handlerCfg.Metrics = cfg.Metrics
+	}
+
+	// Combine the structured OnError (from AsyncErrorConfig) with the convenience
+	// OnAsyncError callback so configuring either - or both - works.
+	cfgOnError := handlerCfg.OnError
+	if cfg.OnAsyncError != nil {
+		handlerCfg.OnError = func(ae *AsyncError) {
+			if cfgOnError != nil {
+				cfgOnError(ae)
+			}
+			cfg.OnAsyncError(ae)
+		}
+	}
+
+	handler := NewAsyncErrorHandler(handlerCfg)
+
+	prev := cfg.ErrorHandler
+	return func(err error) {
+		if err == nil {
+			return
+		}
+		if prev != nil {
+			prev(err)
+		}
+		handler.Handle(WrapAsyncError(AsyncOpBatchSend, err))
+	}
 }
 
 // handleError handles async errors for root-specific functionality.
@@ -257,6 +335,28 @@ func (c *Client) Sessions() *SessionsClient {
 // Models returns the models sub-client.
 func (c *Client) Models() *ModelsClient {
 	return c.models
+}
+
+// MetricsRecorder returns the internal SDK metrics recorder, or nil when the
+// recorder was not enabled (via WithMetricsRecorder) or no Metrics implementation
+// was configured (via WithMetrics).
+//
+// The returned recorder wraps the same Metrics sink the SDK emits queue, batch,
+// and HTTP metrics to, and exposes typed convenience methods (RecordQueueState,
+// RecordHTTPRequest, etc.) for recording additional SDK-internal metrics with
+// consistent naming.
+//
+// Example:
+//
+//	client, _ := langfuse.New(pk, sk,
+//	    langfuse.WithMetrics(myMetricsImpl),
+//	    langfuse.WithMetricsRecorder(),
+//	)
+//	if r := client.MetricsRecorder(); r != nil {
+//	    r.RecordUptime()
+//	}
+func (c *Client) MetricsRecorder() *MetricsRecorder {
+	return c.metricsRecorder
 }
 
 // PromptsWithOptions returns a configured prompts sub-client.

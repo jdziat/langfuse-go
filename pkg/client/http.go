@@ -79,7 +79,7 @@ func newHTTPClient(cfg *Config) *httpClient {
 		retryDelay:    cfg.RetryDelay,
 		retryStrategy: retryStrategy,
 		debug:         cfg.Debug,
-		hook:          combineHooks(cfg.HTTPHooks),
+		hook:          buildRequestHook(cfg),
 		userAgent:     "langfuse-go/" + version,
 	}
 
@@ -378,6 +378,31 @@ func combineHooks(hooks []HTTPHook) HTTPHook {
 		return hooks[0]
 	}
 	return &combinedHook{hooks: hooks}
+}
+
+// buildRequestHook assembles the HTTPHook installed on the client from both the
+// plain HTTPHooks and the priority-aware ClassifiedHooks on the config.
+//
+// Plain HTTPHooks run first, then the classified hooks run through a
+// ClassifiedHookChain so that observational classified hooks log-and-continue on
+// failure while critical classified hooks abort the request. Either set may be
+// empty; if both are empty the result is nil (no hook installed).
+func buildRequestHook(cfg *Config) HTTPHook {
+	plain := combineHooks(cfg.HTTPHooks)
+
+	if len(cfg.ClassifiedHooks) == 0 {
+		return plain
+	}
+
+	chain := pkghttp.NewClassifiedHookChain(cfg.Logger, cfg.Metrics)
+	for _, ch := range cfg.ClassifiedHooks {
+		chain.AddClassified(ch)
+	}
+
+	if plain == nil {
+		return chain
+	}
+	return &combinedHook{hooks: []HTTPHook{plain, chain}}
 }
 
 // combinedHook combines multiple hooks into one.
