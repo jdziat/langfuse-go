@@ -154,13 +154,13 @@ type spanConfig struct {
 // SpanOption configures a span creation.
 // This interface allows both function-based options and unified observation options.
 type SpanOption interface {
-	apply(*spanConfig)
+	applySpan(*spanConfig)
 }
 
 // spanOptionFunc allows using functions as SpanOptions.
 type spanOptionFunc func(*spanConfig)
 
-func (f spanOptionFunc) apply(c *spanConfig) { f(c) }
+func (f spanOptionFunc) applySpan(c *spanConfig) { f(c) }
 
 // WithSpanID sets a custom span ID.
 func WithSpanID(id string) SpanOption {
@@ -267,13 +267,13 @@ type generationConfig struct {
 // GenerationOption configures a generation creation.
 // This interface allows both function-based options and unified observation options.
 type GenerationOption interface {
-	apply2(*generationConfig)
+	applyGeneration(*generationConfig)
 }
 
 // generationOptionFunc allows using functions as GenerationOptions.
 type generationOptionFunc func(*generationConfig)
 
-func (f generationOptionFunc) apply2(c *generationConfig) { f(c) }
+func (f generationOptionFunc) applyGeneration(c *generationConfig) { f(c) }
 
 // WithGenerationID sets a custom generation ID.
 func WithGenerationID(id string) GenerationOption {
@@ -425,13 +425,13 @@ type eventConfig struct {
 // EventOption configures an event creation.
 // This interface allows both function-based options and unified observation options.
 type EventOption interface {
-	apply3(*eventConfig)
+	applyEvent(*eventConfig)
 }
 
 // eventOptionFunc allows using functions as EventOptions.
 type eventOptionFunc func(*eventConfig)
 
-func (f eventOptionFunc) apply3(c *eventConfig) { f(c) }
+func (f eventOptionFunc) applyEvent(c *eventConfig) { f(c) }
 
 // WithEventID sets a custom event ID.
 func WithEventID(id string) EventOption {
@@ -620,7 +620,7 @@ func (c *Client) Trace(ctx context.Context, name string, opts ...TraceOption) (*
 func (t *TraceContext) Span(ctx context.Context, name string, opts ...SpanOption) (*SpanContext, error) {
 	cfg := &spanConfig{}
 	for _, opt := range opts {
-		opt.apply(cfg)
+		opt.applySpan(cfg)
 	}
 
 	builder := t.NewSpan().Name(name)
@@ -672,7 +672,7 @@ func (t *TraceContext) Span(ctx context.Context, name string, opts ...SpanOption
 func (t *TraceContext) Generation(ctx context.Context, name string, opts ...GenerationOption) (*GenerationContext, error) {
 	cfg := &generationConfig{}
 	for _, opt := range opts {
-		opt.apply2(cfg)
+		opt.applyGeneration(cfg)
 	}
 
 	builder := t.NewGeneration().Name(name)
@@ -739,7 +739,7 @@ func (t *TraceContext) Generation(ctx context.Context, name string, opts ...Gene
 func (t *TraceContext) Event(ctx context.Context, name string, opts ...EventOption) error {
 	cfg := &eventConfig{}
 	for _, opt := range opts {
-		opt.apply3(cfg)
+		opt.applyEvent(cfg)
 	}
 
 	builder := t.NewEvent().Name(name)
@@ -880,7 +880,7 @@ func (t *TraceContext) ScoreCategory(ctx context.Context, name string, value str
 func (s *SpanContext) Span(ctx context.Context, name string, opts ...SpanOption) (*SpanContext, error) {
 	cfg := &spanConfig{}
 	for _, opt := range opts {
-		opt.apply(cfg)
+		opt.applySpan(cfg)
 	}
 
 	builder := s.NewSpan().Name(name)
@@ -924,7 +924,7 @@ func (s *SpanContext) Span(ctx context.Context, name string, opts ...SpanOption)
 func (s *SpanContext) Generation(ctx context.Context, name string, opts ...GenerationOption) (*GenerationContext, error) {
 	cfg := &generationConfig{}
 	for _, opt := range opts {
-		opt.apply2(cfg)
+		opt.applyGeneration(cfg)
 	}
 
 	builder := s.NewGeneration().Name(name)
@@ -986,7 +986,7 @@ func (s *SpanContext) Generation(ctx context.Context, name string, opts ...Gener
 func (s *SpanContext) Event(ctx context.Context, name string, opts ...EventOption) error {
 	cfg := &eventConfig{}
 	for _, opt := range opts {
-		opt.apply3(cfg)
+		opt.applyEvent(cfg)
 	}
 
 	builder := s.NewEvent().Name(name)
@@ -1051,7 +1051,7 @@ func (s *SpanContext) Score(ctx context.Context, name string, value float64, opt
 func (g *GenerationContext) Span(ctx context.Context, name string, opts ...SpanOption) (*SpanContext, error) {
 	cfg := &spanConfig{}
 	for _, opt := range opts {
-		opt.apply(cfg)
+		opt.applySpan(cfg)
 	}
 
 	builder := g.NewSpan().Name(name)
@@ -1095,7 +1095,7 @@ func (g *GenerationContext) Span(ctx context.Context, name string, opts ...SpanO
 func (g *GenerationContext) Generation(ctx context.Context, name string, opts ...GenerationOption) (*GenerationContext, error) {
 	cfg := &generationConfig{}
 	for _, opt := range opts {
-		opt.apply2(cfg)
+		opt.applyGeneration(cfg)
 	}
 
 	builder := g.NewGeneration().Name(name)
@@ -1157,7 +1157,7 @@ func (g *GenerationContext) Generation(ctx context.Context, name string, opts ..
 func (g *GenerationContext) Event(ctx context.Context, name string, opts ...EventOption) error {
 	cfg := &eventConfig{}
 	for _, opt := range opts {
-		opt.apply3(cfg)
+		opt.applyEvent(cfg)
 	}
 
 	builder := g.NewEvent().Name(name)

@@ -1087,9 +1087,9 @@ type unifiedInputOption struct {
 	input any
 }
 
-func (o *unifiedInputOption) apply(c *spanConfig)        { c.input = o.input }
-func (o *unifiedInputOption) apply2(c *generationConfig) { c.input = o.input }
-func (o *unifiedInputOption) apply3(c *eventConfig)      { c.input = o.input }
+func (o *unifiedInputOption) applySpan(c *spanConfig)             { c.input = o.input }
+func (o *unifiedInputOption) applyGeneration(c *generationConfig) { c.input = o.input }
+func (o *unifiedInputOption) applyEvent(c *eventConfig)           { c.input = o.input }
 
 // Ensure unifiedInputOption implements all option interfaces
 var _ SpanOption = (*unifiedInputOption)(nil)
@@ -1111,9 +1111,9 @@ type unifiedOutputOption struct {
 	output any
 }
 
-func (o *unifiedOutputOption) apply(c *spanConfig)        { c.output = o.output }
-func (o *unifiedOutputOption) apply2(c *generationConfig) { c.output = o.output }
-func (o *unifiedOutputOption) apply3(c *eventConfig)      { c.output = o.output }
+func (o *unifiedOutputOption) applySpan(c *spanConfig)             { c.output = o.output }
+func (o *unifiedOutputOption) applyGeneration(c *generationConfig) { c.output = o.output }
+func (o *unifiedOutputOption) applyEvent(c *eventConfig)           { c.output = o.output }
 
 var _ SpanOption = (*unifiedOutputOption)(nil)
 var _ GenerationOption = (*unifiedOutputOption)(nil)
@@ -1135,9 +1135,9 @@ type unifiedMetadataOption struct {
 	metadata Metadata
 }
 
-func (o *unifiedMetadataOption) apply(c *spanConfig)        { c.metadata = o.metadata }
-func (o *unifiedMetadataOption) apply2(c *generationConfig) { c.metadata = o.metadata }
-func (o *unifiedMetadataOption) apply3(c *eventConfig)      { c.metadata = o.metadata }
+func (o *unifiedMetadataOption) applySpan(c *spanConfig)             { c.metadata = o.metadata }
+func (o *unifiedMetadataOption) applyGeneration(c *generationConfig) { c.metadata = o.metadata }
+func (o *unifiedMetadataOption) applyEvent(c *eventConfig)           { c.metadata = o.metadata }
 
 var _ SpanOption = (*unifiedMetadataOption)(nil)
 var _ GenerationOption = (*unifiedMetadataOption)(nil)
@@ -1158,15 +1158,15 @@ type unifiedLevelOption struct {
 	level ObservationLevel
 }
 
-func (o *unifiedLevelOption) apply(c *spanConfig) {
+func (o *unifiedLevelOption) applySpan(c *spanConfig) {
 	c.level = o.level
 	c.hasLevel = true
 }
-func (o *unifiedLevelOption) apply2(c *generationConfig) {
+func (o *unifiedLevelOption) applyGeneration(c *generationConfig) {
 	c.level = o.level
 	c.hasLevel = true
 }
-func (o *unifiedLevelOption) apply3(c *eventConfig) {
+func (o *unifiedLevelOption) applyEvent(c *eventConfig) {
 	c.level = o.level
 	c.hasLevel = true
 }
@@ -1190,9 +1190,9 @@ type unifiedStatusMessageOption struct {
 	msg string
 }
 
-func (o *unifiedStatusMessageOption) apply(c *spanConfig)        { c.statusMessage = o.msg }
-func (o *unifiedStatusMessageOption) apply2(c *generationConfig) { c.statusMessage = o.msg }
-func (o *unifiedStatusMessageOption) apply3(c *eventConfig)      { c.statusMessage = o.msg }
+func (o *unifiedStatusMessageOption) applySpan(c *spanConfig)             { c.statusMessage = o.msg }
+func (o *unifiedStatusMessageOption) applyGeneration(c *generationConfig) { c.statusMessage = o.msg }
+func (o *unifiedStatusMessageOption) applyEvent(c *eventConfig)           { c.statusMessage = o.msg }
 
 var _ SpanOption = (*unifiedStatusMessageOption)(nil)
 var _ GenerationOption = (*unifiedStatusMessageOption)(nil)
@@ -1212,9 +1212,9 @@ type unifiedVersionOption struct {
 	version string
 }
 
-func (o *unifiedVersionOption) apply(c *spanConfig)        { c.version = o.version }
-func (o *unifiedVersionOption) apply2(c *generationConfig) { c.version = o.version }
-func (o *unifiedVersionOption) apply3(c *eventConfig)      { c.version = o.version }
+func (o *unifiedVersionOption) applySpan(c *spanConfig)             { c.version = o.version }
+func (o *unifiedVersionOption) applyGeneration(c *generationConfig) { c.version = o.version }
+func (o *unifiedVersionOption) applyEvent(c *eventConfig)           { c.version = o.version }
 
 var _ SpanOption = (*unifiedVersionOption)(nil)
 var _ GenerationOption = (*unifiedVersionOption)(nil)
@@ -1234,9 +1234,9 @@ type unifiedEnvironmentOption struct {
 	env string
 }
 
-func (o *unifiedEnvironmentOption) apply(c *spanConfig)        { c.environment = o.env }
-func (o *unifiedEnvironmentOption) apply2(c *generationConfig) { c.environment = o.env }
-func (o *unifiedEnvironmentOption) apply3(c *eventConfig)      { c.environment = o.env }
+func (o *unifiedEnvironmentOption) applySpan(c *spanConfig)             { c.environment = o.env }
+func (o *unifiedEnvironmentOption) applyGeneration(c *generationConfig) { c.environment = o.env }
+func (o *unifiedEnvironmentOption) applyEvent(c *eventConfig)           { c.environment = o.env }
 
 var _ SpanOption = (*unifiedEnvironmentOption)(nil)
 var _ GenerationOption = (*unifiedEnvironmentOption)(nil)
@@ -1258,15 +1258,15 @@ type unifiedStartTimeOption struct {
 	t time.Time
 }
 
-func (o *unifiedStartTimeOption) apply(c *spanConfig) {
+func (o *unifiedStartTimeOption) applySpan(c *spanConfig) {
 	c.startTime = o.t
 	c.hasStartTime = true
 }
-func (o *unifiedStartTimeOption) apply2(c *generationConfig) {
+func (o *unifiedStartTimeOption) applyGeneration(c *generationConfig) {
 	c.startTime = o.t
 	c.hasStartTime = true
 }
-func (o *unifiedStartTimeOption) apply3(c *eventConfig) {
+func (o *unifiedStartTimeOption) applyEvent(c *eventConfig) {
 	c.startTime = o.t
 	c.hasStartTime = true
 }

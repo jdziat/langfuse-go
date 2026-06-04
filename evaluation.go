@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
-	pkgeval "github.com/jdziat/langfuse-go/pkg/evaluation"
+	evalstore "github.com/jdziat/langfuse-go/pkg/evaluation"
 )
 
 // ============================================================================
@@ -13,173 +13,173 @@ import (
 // ============================================================================
 
 // EvaluationMode controls how traces are structured for LLM-as-a-Judge evaluation.
-type EvaluationMode = pkgeval.Mode
+type EvaluationMode = evalstore.Mode
 
 const (
 	// EvaluationModeOff disables automatic evaluation structuring (default).
-	EvaluationModeOff = pkgeval.ModeOff
+	EvaluationModeOff = evalstore.ModeOff
 
 	// EvaluationModeAuto automatically structures data for common evaluators.
-	EvaluationModeAuto = pkgeval.ModeAuto
+	EvaluationModeAuto = evalstore.ModeAuto
 
 	// EvaluationModeRAGAS structures data specifically for RAGAS metrics.
-	EvaluationModeRAGAS = pkgeval.ModeRAGAS
+	EvaluationModeRAGAS = evalstore.ModeRAGAS
 
 	// EvaluationModeLangfuse structures data for Langfuse managed evaluators.
-	EvaluationModeLangfuse = pkgeval.ModeLangfuse
+	EvaluationModeLangfuse = evalstore.ModeLangfuse
 )
 
 // WorkflowType represents the type of LLM workflow being traced.
-type WorkflowType = pkgeval.WorkflowType
+type WorkflowType = evalstore.WorkflowType
 
 const (
-	WorkflowRAG            = pkgeval.WorkflowRAG
-	WorkflowQA             = pkgeval.WorkflowQA
-	WorkflowChatCompletion = pkgeval.WorkflowChatCompletion
-	WorkflowAgentTask      = pkgeval.WorkflowAgentTask
-	WorkflowChainOfThought = pkgeval.WorkflowChainOfThought
-	WorkflowSummarization  = pkgeval.WorkflowSummarization
-	WorkflowClassification = pkgeval.WorkflowClassification
+	WorkflowRAG            = evalstore.WorkflowRAG
+	WorkflowQA             = evalstore.WorkflowQA
+	WorkflowChatCompletion = evalstore.WorkflowChatCompletion
+	WorkflowAgentTask      = evalstore.WorkflowAgentTask
+	WorkflowChainOfThought = evalstore.WorkflowChainOfThought
+	WorkflowSummarization  = evalstore.WorkflowSummarization
+	WorkflowClassification = evalstore.WorkflowClassification
 )
 
 // EvaluatorType represents built-in evaluator types.
-type EvaluatorType = pkgeval.EvaluatorType
+type EvaluatorType = evalstore.EvaluatorType
 
 const (
-	EvaluatorFaithfulness     = pkgeval.EvaluatorFaithfulness
-	EvaluatorAnswerRelevance  = pkgeval.EvaluatorAnswerRelevance
-	EvaluatorContextPrecision = pkgeval.EvaluatorContextPrecision
-	EvaluatorContextRecall    = pkgeval.EvaluatorContextRecall
-	EvaluatorHallucination    = pkgeval.EvaluatorHallucination
-	EvaluatorToxicity         = pkgeval.EvaluatorToxicity
-	EvaluatorCorrectness      = pkgeval.EvaluatorCorrectness
+	EvaluatorFaithfulness     = evalstore.EvaluatorFaithfulness
+	EvaluatorAnswerRelevance  = evalstore.EvaluatorAnswerRelevance
+	EvaluatorContextPrecision = evalstore.EvaluatorContextPrecision
+	EvaluatorContextRecall    = evalstore.EvaluatorContextRecall
+	EvaluatorHallucination    = evalstore.EvaluatorHallucination
+	EvaluatorToxicity         = evalstore.EvaluatorToxicity
+	EvaluatorCorrectness      = evalstore.EvaluatorCorrectness
 )
 
 // EvaluationConfig holds configuration for evaluation mode.
-type EvaluationConfig = pkgeval.Config
+type EvaluationConfig = evalstore.Config
 
 // DefaultEvaluationConfig returns a sensible default evaluation configuration.
-var DefaultEvaluationConfig = pkgeval.DefaultConfig
+var DefaultEvaluationConfig = evalstore.DefaultConfig
 
 // RAGASEvaluationConfig returns configuration optimized for RAGAS evaluators.
-var RAGASEvaluationConfig = pkgeval.RAGASConfig
+var RAGASEvaluationConfig = evalstore.RAGASConfig
 
 // EvalMetadata contains evaluation-specific metadata added to traces.
-type EvalMetadata = pkgeval.Metadata
+type EvalMetadata = evalstore.Metadata
 
 // EvalMetadataKey is the metadata key used for evaluation metadata.
-const EvalMetadataKey = pkgeval.MetadataKey
+const EvalMetadataKey = evalstore.MetadataKey
 
 // EvalMetadataVersion is the current version of the evaluation metadata schema.
-const EvalMetadataVersion = pkgeval.MetadataVersion
+const EvalMetadataVersion = evalstore.MetadataVersion
 
 // Evaluation tag constants.
 const (
-	EvalTagPrefix      = pkgeval.TagPrefix
-	EvalTagReady       = pkgeval.TagReady
-	EvalTagNotReady    = pkgeval.TagNotReady
-	EvalTagGroundTruth = pkgeval.TagGroundTruth
+	EvalTagPrefix      = evalstore.TagPrefix
+	EvalTagReady       = evalstore.TagReady
+	EvalTagNotReady    = evalstore.TagNotReady
+	EvalTagGroundTruth = evalstore.TagGroundTruth
 )
 
 // EvalTagForWorkflow returns the evaluation tag for a workflow type.
-var EvalTagForWorkflow = pkgeval.TagForWorkflow
+var EvalTagForWorkflow = evalstore.TagForWorkflow
 
 // EvalTagForEvaluator returns the evaluation tag for an evaluator type.
-var EvalTagForEvaluator = pkgeval.TagForEvaluator
+var EvalTagForEvaluator = evalstore.TagForEvaluator
 
 // EvalSpanType represents the type of evaluation span.
-type EvalSpanType = pkgeval.SpanType
+type EvalSpanType = evalstore.SpanType
 
 const (
-	EvalSpanRetrieval  = pkgeval.SpanRetrieval
-	EvalSpanProcessing = pkgeval.SpanProcessing
-	EvalSpanToolCall   = pkgeval.SpanToolCall
-	EvalSpanReasoning  = pkgeval.SpanReasoning
+	EvalSpanRetrieval  = evalstore.SpanRetrieval
+	EvalSpanProcessing = evalstore.SpanProcessing
+	EvalSpanToolCall   = evalstore.SpanToolCall
+	EvalSpanReasoning  = evalstore.SpanReasoning
 )
 
 // EvalInput represents a structured input that can be flattened for evaluation.
-type EvalInput = pkgeval.Input
+type EvalInput = evalstore.Input
 
 // EvalOutput represents a structured output that can be flattened for evaluation.
-type EvalOutput = pkgeval.Output
+type EvalOutput = evalstore.Output
 
 // InputFlattener flattens structured inputs for evaluation.
-type InputFlattener = pkgeval.InputFlattener
+type InputFlattener = evalstore.InputFlattener
 
 // NewInputFlattener creates a new input flattener for the given mode.
-var NewInputFlattener = pkgeval.NewInputFlattener
+var NewInputFlattener = evalstore.NewInputFlattener
 
 // FlattenedInput wraps flattened input data with metadata.
-type FlattenedInput = pkgeval.FlattenedInput
+type FlattenedInput = evalstore.FlattenedInput
 
 // FlattenedOutput wraps flattened output data with metadata.
-type FlattenedOutput = pkgeval.FlattenedOutput
+type FlattenedOutput = evalstore.FlattenedOutput
 
 // StandardEvalInput provides a standard evaluation input structure.
-type StandardEvalInput = pkgeval.StandardInput
+type StandardEvalInput = evalstore.StandardInput
 
 // StandardEvalOutput provides a standard evaluation output structure.
-type StandardEvalOutput = pkgeval.StandardOutput
+type StandardEvalOutput = evalstore.StandardOutput
 
 // EvalState tracks the current evaluation state for a trace.
-type EvalState = pkgeval.State
+type EvalState = evalstore.State
 
 // NewEvalState creates a new evaluation state tracker.
-var NewEvalState = pkgeval.NewState
+var NewEvalState = evalstore.NewState
 
 // EvalMetadataBuilder helps build evaluation metadata.
-type EvalMetadataBuilder = pkgeval.MetadataBuilder
+type EvalMetadataBuilder = evalstore.MetadataBuilder
 
 // NewEvalMetadataBuilder creates a new evaluation metadata builder.
-var NewEvalMetadataBuilder = pkgeval.NewMetadataBuilder
+var NewEvalMetadataBuilder = evalstore.NewMetadataBuilder
 
 // ValidateForEvaluator checks if data has all required fields for an evaluator.
-var ValidateForEvaluator = pkgeval.ValidateForEvaluator
+var ValidateForEvaluator = evalstore.ValidateForEvaluator
 
 // ValidateForWorkflow checks if data has all required fields for a workflow.
-var ValidateForWorkflow = pkgeval.ValidateForWorkflow
+var ValidateForWorkflow = evalstore.ValidateForWorkflow
 
 // FieldAlias returns an alias for a field name (for compatibility).
-var FieldAlias = pkgeval.FieldAlias
+var FieldAlias = evalstore.FieldAlias
 
 // ExtractFieldPresence checks which evaluation fields are present in data.
-var ExtractFieldPresence = pkgeval.ExtractFieldPresence
+var ExtractFieldPresence = evalstore.ExtractFieldPresence
 
 // MergeFieldPresence merges two presence maps.
-var MergeFieldPresence = pkgeval.MergeFieldPresence
+var MergeFieldPresence = evalstore.MergeFieldPresence
 
 // EvalGenerationResult contains the result of an LLM generation for evaluation.
-type EvalGenerationResult = pkgeval.GenerationResult
+type EvalGenerationResult = evalstore.GenerationResult
 
 // RetrievalOutput represents the output of a retrieval operation.
-type RetrievalOutput = pkgeval.RetrievalOutput
+type RetrievalOutput = evalstore.RetrievalOutput
 
 // ToolCallResult represents the result of a tool call.
-type ToolCallResult = pkgeval.ToolCallResult
+type ToolCallResult = evalstore.ToolCallResult
 
 // EventPersistence handles saving and loading events to/from disk.
-type EventPersistence = pkgeval.EventPersistence
+type EventPersistence = evalstore.EventPersistence
 
 // NewEventPersistence creates a new event persistence handler.
-var NewEventPersistence = pkgeval.NewEventPersistence
+var NewEventPersistence = evalstore.NewEventPersistence
 
 // PersistedEvent represents an event saved to disk.
-type PersistedEvent = pkgeval.PersistedEvent
+type PersistedEvent = evalstore.PersistedEvent
 
 // PersistedBatch represents a batch of events saved to disk.
-type PersistedBatch = pkgeval.PersistedBatch
+type PersistedBatch = evalstore.PersistedBatch
 
 // PersistenceConfig configures the event persistence behavior.
-type PersistenceConfig = pkgeval.PersistenceConfig
+type PersistenceConfig = evalstore.PersistenceConfig
 
 // DefaultPersistenceConfig returns a PersistenceConfig with sensible defaults.
-var DefaultPersistenceConfig = pkgeval.DefaultPersistenceConfig
+var DefaultPersistenceConfig = evalstore.DefaultPersistenceConfig
 
 // ManagedPersistence wraps EventPersistence with automatic cleanup.
-type ManagedPersistence = pkgeval.ManagedPersistence
+type ManagedPersistence = evalstore.ManagedPersistence
 
 // NewManagedPersistence creates a new managed persistence handler.
-var NewManagedPersistence = pkgeval.NewManagedPersistence
+var NewManagedPersistence = evalstore.NewManagedPersistence
 
 // ============================================================================
 // Internal Helper Functions
@@ -187,12 +187,12 @@ var NewManagedPersistence = pkgeval.NewManagedPersistence
 
 // prepareInputForEval prepares input data for evaluation based on config.
 func prepareInputForEval(data any, config *EvaluationConfig) any {
-	return pkgeval.PrepareInput(data, config)
+	return evalstore.PrepareInput(data, config)
 }
 
 // prepareOutputForEval prepares output data for evaluation based on config.
 func prepareOutputForEval(data any, config *EvaluationConfig) any {
-	return pkgeval.PrepareOutput(data, config)
+	return evalstore.PrepareOutput(data, config)
 }
 
 // mergeMetadata merges evaluation metadata into existing metadata.
@@ -490,7 +490,7 @@ func (g *EvalGenerationContext) ValidateForEvaluator(evaluator EvaluatorType) er
 
 	var missing []string
 	for _, f := range required {
-		if !allFields[f] && !allFields[pkgeval.FieldAlias(f)] {
+		if !allFields[f] && !allFields[evalstore.FieldAlias(f)] {
 			missing = append(missing, f)
 		}
 	}

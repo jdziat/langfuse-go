@@ -1,11 +1,13 @@
-// Package evaluation provides types and utilities for LLM evaluation workflows.
+// Package evalstore provides the implementation layer (state, persistence,
+// flattening, and result types) for LLM evaluation workflows. It is the
+// internal counterpart to the public top-level evaluation package.
 //
 // This package supports structured evaluation with:
 //   - Workflow types (RAG, Q&A, summarization, etc.)
 //   - Evaluator types (faithfulness, relevance, hallucination, etc.)
 //   - Input/output flattening for direct field access in evaluators
 //   - Metadata builders for evaluation-ready traces
-package evaluation
+package evalstore
 
 import (
 	"time"

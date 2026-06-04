@@ -57,7 +57,7 @@ func (s *Service) ProcessMessage(ctx context.Context, message string) (string, e
 	}
 
 	// Add a score
-	if err := trace.ScoreNumeric(ctx, "quality", 0.95); err != nil {
+	if err := trace.Score(ctx, "quality", 0.95); err != nil {
 		return "", err
 	}
 

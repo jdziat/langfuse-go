@@ -898,36 +898,6 @@ func (t *TraceContext) NewScore() *ScoreBuilder {
 	}
 }
 
-// ScoreNumeric adds a numeric score to this trace.
-// This is a convenience method for the common case of adding a simple numeric score.
-//
-// Example:
-//
-//	trace.ScoreNumeric(ctx, "quality", 0.95)
-func (t *TraceContext) ScoreNumeric(ctx context.Context, name string, value float64) error {
-	return t.NewScore().Name(name).NumericValue(value).Create(ctx)
-}
-
-// ScoreCategorical adds a categorical score to this trace.
-// This is a convenience method for the common case of adding a simple categorical score.
-//
-// Example:
-//
-//	trace.ScoreCategorical(ctx, "sentiment", "positive")
-func (t *TraceContext) ScoreCategorical(ctx context.Context, name string, value string) error {
-	return t.NewScore().Name(name).CategoricalValue(value).Create(ctx)
-}
-
-// ScoreBoolean adds a boolean score to this trace.
-// This is a convenience method for the common case of adding a simple boolean score.
-//
-// Example:
-//
-//	trace.ScoreBoolean(ctx, "correct", true)
-func (t *TraceContext) ScoreBoolean(ctx context.Context, name string, value bool) error {
-	return t.NewScore().Name(name).BooleanValue(value).Create(ctx)
-}
-
 // TraceUpdateBuilder provides a fluent interface for updating traces.
 //
 // TraceUpdateBuilder is NOT safe for concurrent use. Each builder instance
@@ -1376,24 +1346,6 @@ func (s *SpanContext) NewScore() *ScoreBuilder {
 	builder := s.TraceContext.NewScore()
 	builder.score.ObservationID = s.spanID
 	return builder
-}
-
-// ScoreNumeric adds a numeric score to this span.
-// This is a convenience method for the common case of adding a simple numeric score.
-func (s *SpanContext) ScoreNumeric(ctx context.Context, name string, value float64) error {
-	return s.NewScore().Name(name).NumericValue(value).Create(ctx)
-}
-
-// ScoreCategorical adds a categorical score to this span.
-// This is a convenience method for the common case of adding a simple categorical score.
-func (s *SpanContext) ScoreCategorical(ctx context.Context, name string, value string) error {
-	return s.NewScore().Name(name).CategoricalValue(value).Create(ctx)
-}
-
-// ScoreBoolean adds a boolean score to this span.
-// This is a convenience method for the common case of adding a simple boolean score.
-func (s *SpanContext) ScoreBoolean(ctx context.Context, name string, value bool) error {
-	return s.NewScore().Name(name).BooleanValue(value).Create(ctx)
 }
 
 // SpanUpdateBuilder provides a fluent interface for updating spans.
@@ -1996,24 +1948,6 @@ func (g *GenerationContext) NewScore() *ScoreBuilder {
 	builder := g.TraceContext.NewScore()
 	builder.score.ObservationID = g.genID
 	return builder
-}
-
-// ScoreNumeric adds a numeric score to this generation.
-// This is a convenience method for the common case of adding a simple numeric score.
-func (g *GenerationContext) ScoreNumeric(ctx context.Context, name string, value float64) error {
-	return g.NewScore().Name(name).NumericValue(value).Create(ctx)
-}
-
-// ScoreCategorical adds a categorical score to this generation.
-// This is a convenience method for the common case of adding a simple categorical score.
-func (g *GenerationContext) ScoreCategorical(ctx context.Context, name string, value string) error {
-	return g.NewScore().Name(name).CategoricalValue(value).Create(ctx)
-}
-
-// ScoreBoolean adds a boolean score to this generation.
-// This is a convenience method for the common case of adding a simple boolean score.
-func (g *GenerationContext) ScoreBoolean(ctx context.Context, name string, value bool) error {
-	return g.NewScore().Name(name).BooleanValue(value).Create(ctx)
 }
 
 // NewSpan creates a child span builder under this generation (Advanced API).

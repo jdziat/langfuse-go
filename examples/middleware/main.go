@@ -140,7 +140,7 @@ func TracingMiddleware(next http.Handler) http.Handler {
 		if rw.status >= 400 {
 			scoreValue = 0.0
 		}
-		trace.ScoreNumeric(ctx, "success", scoreValue)
+		trace.Score(ctx, "success", scoreValue)
 	})
 }
 

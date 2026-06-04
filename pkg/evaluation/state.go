@@ -1,4 +1,4 @@
-package evaluation
+package evalstore
 
 import (
 	"fmt"
