@@ -29,7 +29,12 @@ jobs:
       - name: Setup Hugo
         uses: peaceiris/actions-hugo@v3
         with:
-          hugo-version: 'latest'
+          # Pinned, not 'latest': the hextra v0.11.1 theme's list.rss.xml uses
+          # .Site.Author.email, which Hugo removed (>= ~0.156), so 'latest'
+          # (0.162+) fails with "can't evaluate field Author in type page.Site".
+          # 0.155.3 is verified to build the full site (incl. /tags RSS).
+          # Bump in lockstep with the hextra theme version in go.mod.
+          hugo-version: '0.155.3'
           extended: true
 
       - name: Setup Go
