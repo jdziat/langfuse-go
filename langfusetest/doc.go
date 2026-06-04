@@ -18,18 +18,16 @@
 //
 // # Test Client
 //
-// Use NewTestClient for a pre-configured client with a mock server:
+// Use NewTestClient for a pre-configured client with a mock server. Pass the
+// test's *testing.T; the client is cleaned up automatically when the test ends:
 //
-//	func TestMyFeature(t *testing.T) {
-//	    client, server := langfusetest.NewTestClient(t)
-//	    // client is automatically cleaned up when test ends
+//	client, server := langfusetest.NewTestClient(t)
 //
-//	    trace, _ := client.NewTrace().Name("test").Create()
-//	    // ...
+//	trace, _ := client.NewTrace().Name("test").Create(ctx)
+//	_ = trace
 //
-//	    if server.RequestCount() != 1 {
-//	        t.Error("expected 1 request")
-//	    }
+//	if server.RequestCount() != 1 {
+//	    t.Errorf("expected 1 request, got %d", server.RequestCount())
 //	}
 //
 // # Mock Metrics
@@ -49,7 +47,7 @@
 // Use MockLogger to capture log output:
 //
 //	logger := langfusetest.NewMockLogger()
-//	client, _ := langfuse.New("pk", "sk", langfuse.WithLogger(logger))
+//	client, _ := langfuse.New("pk", "sk", langfuse.WithStructuredLogger(logger))
 //	// ... use client ...
 //
 //	messages := logger.GetMessages()

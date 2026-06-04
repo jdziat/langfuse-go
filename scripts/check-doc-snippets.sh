@@ -13,6 +13,8 @@
 # Sources scanned:
 #   - README.md
 #   - doc.go            (the tab-indented code blocks inside its // comment)
+#   - **/doc.go         (subpackage package docs: evaluation/, langfusetest/,
+#                        pkg/*/ — same tab-indented comment-block extraction)
 #   - content/docs/**.md
 #
 # Convention (so authors know what is checked and how to opt out):
@@ -53,7 +55,14 @@
 #         usage      *langfuse.Usage
 #         publicKey  string
 #         secretKey  string
+#         t          *testing.T
 #         err        error
+#
+#       Fragments may also reference the SDK subpackages by their natural import
+#       names: langfusetest, builders, id, and pkgerrors (the pkg/errors helper
+#       package, aliased to avoid colliding with the stdlib errors package).
+#       stdErrors is the standard library errors package; errors is too, kept
+#       for the historical fragments that call errors.Is/errors.As.
 #
 #   ```go-nocompile
 #   ...
@@ -84,6 +93,14 @@ DOC_GLOBS=(
 	"doc.go"
 	"content/docs"/*.md
 )
+# Subpackage doc.go files carry godoc examples too (evaluation/doc.go,
+# langfusetest/doc.go, pkg/*/doc.go). The gate historically scanned only the
+# root doc.go, which let those subpackage examples rot undetected. Discover
+# them here (everything ending in /doc.go, i.e. NOT the already-listed root
+# doc.go) and route them through the same comment-block extractor below.
+while IFS= read -r f; do
+	DOC_GLOBS+=("$f")
+done < <(find . -type f -name doc.go -not -path './doc.go' | sed 's|^\./||' | sort)
 
 WORKDIR="$(mktemp -d 2>/dev/null || mktemp -d -t langfuse-doc-snippets)"
 # shellcheck disable=SC2329  # invoked indirectly via the EXIT trap below.
@@ -150,9 +167,13 @@ extract_markdown_blocks() {
 # indented run of comment lines as a code block, so we treat a maximal run of
 # "//\t..." lines (allowing blank "//" separators inside) as one block.
 extract_docgo_blocks() {
-	local src="doc.go"
+	local src="${1:-doc.go}"
 	[ -f "$src" ] || return 0
-	awk -v src="$src" -v workdir="$WORKDIR" -v recid="doc_go" '
+	# Stable, filesystem-safe record id derived from the source path so blocks
+	# from different doc.go files never collide (e.g. evaluation_doc_go).
+	local recid
+	recid="$(printf '%s' "$src" | tr -c 'a-zA-Z0-9' '_')"
+	awk -v src="$src" -v workdir="$WORKDIR" -v recid="$recid" '
 		function flush() {
 			if (buf == "") return
 			n++
@@ -200,8 +221,8 @@ extract_docgo_blocks() {
 : >"$WORKDIR/index"
 for g in "${DOC_GLOBS[@]}"; do
 	[ -e "$g" ] || continue
-	if [ "$g" = "doc.go" ]; then
-		extract_docgo_blocks
+	if [ "$g" = "doc.go" ] || [ "${g%/doc.go}" != "$g" ]; then
+		extract_docgo_blocks "$g"
 	else
 		extract_markdown_blocks "$g"
 	fi
@@ -209,9 +230,10 @@ done
 
 # wrap_fragment composes a buildable Go file for a fragment block. It adds a
 # package clause, the documented import block (the SDK aliased "langfuse",
-# matching the docs, plus the SDK's evaluation helper package and the handful
-# of stdlib packages the examples lean on), and a wrapper function that exposes
-# the common scaffold identifiers as PARAMETERS. Parameters are never flagged
+# matching the docs, plus the SDK subpackages the examples reference —
+# evaluation, langfusetest, builders, id, pkg/errors aliased "pkgerrors" — and
+# the handful of stdlib packages the examples lean on), and a wrapper function
+# that exposes the common scaffold identifiers as PARAMETERS. Parameters are never flagged
 # "declared and not used", and nesting the fragment body in its own block lets
 # `ctx := ...` / `trace, err := ...` shadow the scaffolds without tripping the
 # "no new variables on left side of :=" rule. Unused imports are tolerated via
@@ -266,14 +288,20 @@ wrap_fragment() {
 		echo "import ("
 		echo "	\"context\""
 		echo "	\"errors\""
+		echo "	stdErrors \"errors\""
 		echo "	\"fmt\""
 		echo "	\"log\""
 		echo "	\"net/http\""
 		echo "	\"os\""
+		echo "	\"testing\""
 		echo "	\"time\""
 		echo ""
 		echo "	langfuse \"$MODULE_PATH\""
 		echo "	\"$MODULE_PATH/evaluation\""
+		echo "	\"$MODULE_PATH/langfusetest\""
+		echo "	\"$MODULE_PATH/pkg/builders\""
+		echo "	pkgerrors \"$MODULE_PATH/pkg/errors\""
+		echo "	\"$MODULE_PATH/pkg/id\""
 		echo ")"
 		echo ""
 		echo "// Reference imports so unused ones do not break the build; the"
@@ -281,6 +309,7 @@ wrap_fragment() {
 		echo "var ("
 		echo "	_ = context.Background"
 		echo "	_ = errors.Is"
+		echo "	_ = stdErrors.Is"
 		echo "	_ = fmt.Sprint"
 		echo "	_ = log.Print"
 		echo "	_ = http.DefaultClient"
@@ -288,6 +317,10 @@ wrap_fragment() {
 		echo "	_ = time.Second"
 		echo "	_ = langfuse.New"
 		echo "	_ = evaluation.NewQATrace"
+		echo "	_ = langfusetest.NewMockServer"
+		echo "	_ = builders.BuildMetadata"
+		echo "	_ = pkgerrors.AsAPIError"
+		echo "	_ = id.GenerateID"
 		echo ")"
 		echo ""
 		echo "func main() {}"
@@ -306,6 +339,7 @@ wrap_fragment() {
 		echo "	usage *langfuse.Usage,"
 		echo "	publicKey string,"
 		echo "	secretKey string,"
+		echo "	t *testing.T,"
 		echo "	err error,"
 		echo ") {"
 		echo "	_ = ctx"
@@ -317,6 +351,7 @@ wrap_fragment() {
 		echo "	_ = usage"
 		echo "	_ = publicKey"
 		echo "	_ = secretKey"
+		echo "	_ = t"
 		echo "	_ = err"
 		echo "	{"
 		cat "$body_file"
