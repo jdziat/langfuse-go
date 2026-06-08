@@ -64,7 +64,7 @@ jobs:
           awk -v p="$pct" -v floor=60 'BEGIN { if (p+0 < floor) { printf "FAIL: pkg/client coverage %.1f%% is below floor %d%%\n", p, floor; exit 1 } printf "OK: pkg/client coverage %.1f%% meets floor %d%%\n", p, floor }'
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v6
+        uses: codecov/codecov-action@v7
         if: matrix.go-version == '1.25.11'
         with:
           file: ./coverage.out
